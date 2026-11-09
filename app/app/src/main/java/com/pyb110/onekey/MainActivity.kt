@@ -436,6 +436,7 @@ class MainActivity : ComponentActivity() {
             kernelVersion == V2505A_KERNEL_RELEASE &&
                 Build.MANUFACTURER.equals("vivo", ignoreCase = true) -> ExploitKind.CVE2505A
             kernelVersion.contains("6.12.69") -> ExploitKind.CVE61269
+            kernelVersion.contains("6.6.127") -> ExploitKind.CVE66127
             else -> ExploitKind.CVE98260
         }
         if (manager == ManagerKind.DYNAMIC && !supportsUniversal()) {
@@ -1458,12 +1459,14 @@ class MainActivity : ComponentActivity() {
                         )
                         Divider(startIndent = itemDividerIndent(), color = colors.divider)
                     }
-                    SettingSwitchItem(
-                        icon = Icons.Filled.Extension,
-                        title = "SUSFS 支持",
-                        checked = susfsSupport,
-                        onCheckedChange = { updateSusfsSupport(it) }
-                    )
+                    if (supportsSusfs()) {
+                        SettingSwitchItem(
+                            icon = Icons.Filled.Extension,
+                            title = "SUSFS 支持",
+                            checked = susfsSupport,
+                            onCheckedChange = { updateSusfsSupport(it) }
+                        )
+                    }
                     if (exploit == ExploitKind.CVE98260) {
                         Divider(startIndent = itemDividerIndent(), color = colors.divider)
                         SettingSwitchItem(
@@ -2451,6 +2454,7 @@ class MainActivity : ComponentActivity() {
                 val cmd = when (exploit) {
                     ExploitKind.CVE98260 -> arrayOf("$nativeDir/libt98260.so", "run")
                     ExploitKind.CVE61269 -> arrayOf("$nativeDir/libt61269.so", "run")
+                    ExploitKind.CVE66127 -> arrayOf("$nativeDir/libt66127.so", "run")
                     ExploitKind.CVE2505A -> arrayOf("$nativeDir/libv2505a.so", "run")
                 }
                 val rc = runStreaming(cmd, nativeDir)
@@ -2491,13 +2495,14 @@ class MainActivity : ComponentActivity() {
         } else {
             "${applicationInfo.nativeLibraryDir}/libsusfs_guard_lkm.so"
         }
+        val susfsActive = susfsSupport && supportsSusfs()
         val universal = dynamicSwitching && supportsUniversal()
         val initialManager = if (manager == ManagerKind.DYNAMIC) ManagerKind.KERNELSU else manager
         val env = shizukuEnv() + "PYB110_DIR=$dir" + "PYB110_MANAGER=${initialManager.manager}" +
             "PYB110_LATE_LOAD=1" +
             "PYB110_UNLOAD_GUARD=${if (unloadGuard) "1" else "0"}" +
             "PYB110_DISABLE_ANTIROOT=${if (antiRootGuard) "1" else "0"}" +
-            "PYB110_SUSFS=${if (susfsSupport) "1" else "0"}" +
+            "PYB110_SUSFS=${if (susfsActive) "1" else "0"}" +
             "PYB110_VFS=${if (vfsSupport) "1" else "0"}" +
             "PYB110_UNIVERSAL=${if (universal) "1" else "0"}" +
             "PYB110_UNIVERSAL_KSUD=${applicationInfo.nativeLibraryDir}/libksud_universal.so" +
@@ -2546,6 +2551,7 @@ class MainActivity : ComponentActivity() {
     private enum class ExploitKind(val fullLabel: String) {
         CVE98260("CVE-2026-98260-6.18"),
         CVE61269("CVE-2026-98260-6.12"),
+        CVE66127("CVE-2026-98260-vivo-6.6.127"),
         CVE2505A("CVE-2026-98260-vivo-V2505A")
     }
 
@@ -2562,6 +2568,9 @@ class MainActivity : ComponentActivity() {
         exploit == ExploitKind.CVE98260 ||
             exploit == ExploitKind.CVE61269 ||
             exploit == ExploitKind.CVE2505A
+
+    private fun supportsSusfs(): Boolean =
+        exploit != ExploitKind.CVE66127
 
     private fun managerChoices(): List<ManagerKind> =
         if (supportsUniversal()) ManagerKind.entries

@@ -48,6 +48,7 @@ SukiSU Ultra 或 FinaSU 的 root 环境。
 | OPPO Pad 5 Pro（OPD2511） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k` |
 | Realme GT8 Pro（RMX5200） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k` |
 | iQOO 15（V2505A） | OriginOS 6 | `6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k` |
+| vivo X200 Ultra（PD2454） | OriginOS 7 | `6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k`（待真机验证） |
 
 ## 支持的管理器
 
@@ -59,7 +60,7 @@ KernelSU、KernelSU-Next、BakaSU、SukiSU Ultra、FinaSU 五家。
 ## 能做什么
 
 - **一键临时 Root**：打开 App 后不需要手动选漏洞，它会根据 `uname -r`
-  自动匹配 6.18 / 6.12 / V2505A 三条链。点一次「一键越狱」即可完成提权、
+  自动匹配 6.18.21 / 6.12.69 / 6.6.127 / V2505A 四条链。点一次「一键越狱」即可完成提权、
   `ksud late-load`、模块安装和管理器拉起；临时 Root 在重启后消失，下次
   开机重新执行即可。
 - **五家管理器可选**：ROOT 管理器下拉直接选择 KernelSU、KernelSU-Next、
@@ -124,7 +125,8 @@ Shark/
 │   │   └── DroidspacesModule.kt Droidspaces 模块下载
 │   ├── app/src/main/jniLibs/arm64-v8a/
 │   │   ├── libt98260.so         6.18 runner
-│   │   ├── libt61269.so         6.12 runner
+│   │   ├── libt61269.so         6.12.69 runner
+│   │   ├── libt66127.so         6.6.127 runner
 │   │   ├── libv2505a.so         V2505A runner
 │   │   ├── libksud_universal.so 双 KMI 通用 loader
 │   │   ├── libsusfs_guard_lkm.so
@@ -134,7 +136,7 @@ Shark/
 │   └── gradle/、keystore/
 ├── exploit/
 │   ├── rust-t98260/             6.18 Rust runner
-│   ├── rust-t61269/             6.12 / V2505A Rust runner
+│   ├── rust-t61269/             6.12 / 6.6.127 / V2505A Rust runner
 │   └── src/                     C plant（98260 核心）
 ├── lkm/
 │   ├── susfs4ksu-lkm/           SUSFS guard 源码
@@ -142,6 +144,7 @@ Shark/
 │   └── susfs-tools/             SUSFS 规则工具
 ├── docs/screenshots/            README 截图
 ├── ports/v2505a/                V2505A 说明与验证记录
+├── ports/pd2454-66127/          PD2454 6.6.127 说明与验证记录
 ├── third_party/                 第三方许可与材料
 ├── NOTICE / LICENSE
 └── README.md
@@ -155,6 +158,7 @@ Shark/
   `ksud late-load` 与收尾。
 - `lkm/`：SUSFS guard 和 Hybrid Mount VFS provider 的源码与构建脚本。
 - `ports/v2505a/`：V2505A 分支的说明、常量和验证记录。
+- `ports/pd2454-66127/`：PD2454 6.6.127 的常量恢复脚本与验证记录。
 - `third_party/`：第三方许可全文与参考材料。
 
 **技术栈**
@@ -193,6 +197,7 @@ Shark 只内置编译好的 `libksud_universal.so`。
 
 - Dynamic Switching 第一次要干净开机；之后切换管理器不用重启。
 - 普通模式必须先装对应管理器 APK，ksud 不从 Shark 内置。
+- 6.6.127（vivo X200 Ultra）使用 android15-6.6 KMI，普通模式需要管理器自带对应 LKM/ksud；该入口暂不支持 SUSFS 和 Dynamic Switching。
 - KPM 暂未启用。
 - CVE-2026-98260 是竞态 UAF，任何一次运行都可能导致内核 panic 或重启。
 - 只用于自己的设备，风险自负。
