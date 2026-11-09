@@ -8,6 +8,17 @@
 常量已从 OTA `boot.img` 的内核 Image 静态恢复，并用镜像自带的 `.BTF` 交叉校验了
 slab 与结构体布局。**尚需真机验证**：先跑只读 `probe`，再跑完整 `run`。
 
+## 复核记录
+
+2026-11-09 用下列 OTA 镜像复核，`recover.py` 输出与本文件常量完全一致：
+
+- `boot.img`：100,663,296 字节，SHA-256 `888332748bd958be9e6ca8b0c4540eea6adfb31fe0dd347df067a9eb6943eaf6`
+- 内核 Image：41,236,992 字节（`boot.img[0x1000:]`），SHA-256 `ddecb86ddcd2f9ab3e27f9f5f051083af19bf89c7575779161ca6aa942a5129a`
+- kallsyms：`n=128498`、`names 0x14e2b88..0x16d7e34`、`offsets 0x16d8ba8`、`relative_base 0xffffffc080000000`、0 逆序
+- `do_timer_create=0xffffffc080517e3c`，BL `+0xa8`，site `0xffffffc080517ee8`（low21 `0x117ee8`）
+- `copy_process=0xffffffc0801aaebc`，BL `+0x158`，site `0xffffffc0801ab018`（low21 `0x1ab018`）
+- 其余静态地址与 BTF 全部一致（见上表）
+
 ## 目标
 
 - 机型：OnePlus PLZ110（SM8850 / canoe），Android 17
@@ -20,8 +31,8 @@ slab 与结构体布局。**尚需真机验证**：先跑只读 `probe`，再跑
 ```c
 #define TARGET_KERNEL_RELEASE      "6.12.58-android16-6-g7704a1ae279b-ab15213644-4k"
 
-/* do_timer_create = 0xffffffc080517e3c，bl kmem_cache_alloc_noprof @ +0xa4 */
-#define STATIC_TIMER_SITE          0xffffffc080517ee8ULL   /* 返回地址 +0xa8 */
+/* do_timer_create = 0xffffffc080517e3c，bl kmem_cache_alloc_noprof @ +0xa8 */
+#define STATIC_TIMER_SITE          0xffffffc080517ee8ULL   /* 返回地址 +0xac */
 #define TIMER_SITE_LOW21           0x117ee8ULL
 
 /* kallsyms 链接期地址 */
@@ -29,8 +40,8 @@ slab 与结构体布局。**尚需真机验证**：先跑只读 `probe`，再跑
 #define PANIC_ON_WARN_STATIC       0xffffffc08251afe0ULL
 
 /* copy_process = 0xffffffc0801aaebc，内联 dup_task_struct 里
- * ldr x0,[task_struct_cachep] 后 bl kmem_cache_alloc_node_noprof @ +0x154 */
-#define COPY_PROCESS_LOW21         0x1ab018ULL             /* 返回地址 +0x158 */
+ * ldr x0,[task_struct_cachep] 后 bl kmem_cache_alloc_node_noprof @ +0x158 */
+#define COPY_PROCESS_LOW21         0x1ab018ULL             /* 返回地址 +0x15c */
 
 /* fake cred 引用计数子对象 */
 #define ROOT_USER_STATIC           0xffffffc082542360ULL
@@ -83,9 +94,10 @@ python3 recover.py kernel.bin      # kernel.bin = boot.img[0x1000 : 0x1000+kerne
    并用前一条 `adrp/ldr` 是否加载 `posix_timers_cache` / `task_struct_cachep` 做确认。
    ftrace 记录的是返回地址（`_RET_IP_`），故 site = BL 地址 + 4。
 
-> 注意 `do_timer_create` 里有**两个** `posix_timers_cache` 分配点（+0xa8 与 +0x588），
-> 这里取主路径的前者。若真机上 `PROBE_TIMER recs=0`，说明走的是另一条路径，
-> 把 `STATIC_TIMER_SITE` 换成 `0xffffffc0805183c8`、`TIMER_SITE_LOW21` 换成 `0x1183c8` 再试。
+> 注意 `do_timer_create` 里有**两个** `posix_timers_cache` 分配点（BL `+0xa8` / `+0x588`，
+> 对应 site `+0xac` / `+0x58c`），这里取主路径的前者。若真机上 `PROBE_TIMER recs=0`，
+> 说明走的是另一条路径，把 `STATIC_TIMER_SITE` 换成 `0xffffffc0805183c8`、
+> `TIMER_SITE_LOW21` 换成 `0x1183c8` 再试。
 
 ## 构建
 
