@@ -158,6 +158,14 @@ cp target/aarch64-linux-android/release/t61269 \
 3. 冷重启后再跑一次；再验证 SUSFS 与 Dynamic Switching
 4. 失败一律留 holder（`t61269-hold`），**同 boot 不要强行重跑**，冷重启再试
 
+## 鲁棒性修正
+
+- child report：如果 fake cred 的 task->cred 写入比 child 首次读 uid 晚，初始
+  euid 可能仍是 2000；只要 `setuid(0)=0` 且 `resuid=0/0/0`，就按已取得 root
+  处理，继续 late-load。
+- burst miss：selinux 等 zero-write 的页面 burst 未命中后保留 holder，但不再
+  用同一个 held zombie 原样重试；失败后走新一轮/冷重启。
+
 ## 限制
 
 - 新内核是 android16-6；SUSFS/通用 KO 的兼容性按 V2505A 链复用，
