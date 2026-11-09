@@ -2456,8 +2456,8 @@ class MainActivity : ComponentActivity() {
                     ExploitKind.CVE98260 -> arrayOf("$nativeDir/libt98260.so", "run")
                     ExploitKind.CVE61269 -> arrayOf("$nativeDir/libt61269.so", "run")
                     ExploitKind.CVE2505A -> arrayOf("$nativeDir/libv2505a.so", "run")
-                    ExploitKind.CVE2505A_61258 -> arrayOf("$nativeDir/libv2505a_61258.so", "run")
-                    ExploitKind.CVE2505A_61258_OS7 -> arrayOf("$nativeDir/libv2505a_61258_os7.so", "run")
+                    ExploitKind.CVE2505A_61258 -> arrayOf("$nativeDir/libv2505a.so", "run")
+                    ExploitKind.CVE2505A_61258_OS7 -> arrayOf("$nativeDir/libv2505a.so", "run")
                 }
                 val rc = runStreaming(cmd, nativeDir)
                 exit = rc

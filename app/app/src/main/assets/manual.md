@@ -23,7 +23,7 @@ Shark 通过 Stellar 或 Shizuku 以 shell 身份驱动设备端 98260 exploit�
 
 **preflight**（内核 release / trace 通道）→ **98260 UAF**（fake cred / SELinux 零写）→ **cred 子进程一次性 ksud late-load** → 等模块与 su → **收尾**（ksud install、卸内核防护、SUSFS、VFS、截图恢复、拉起管理器）。
 
-V2505A 使用独立的单入口二进制 `libv2505a`（6.12.23）、`libv2505a_61258`（6.12.58 OS6）和 `libv2505a_61258_os7`（6.12.58 OS7），同一份 C plant 以 `-DV2505A` / `-DV2505A_61258` / `-DV2505A_61258_OS7` 编译，不复用 `t98260`、`t61269` 的常量。它们都会在唤醒 root 子进程前清零 `vr.ko` 使用的 `__tracepoint_sys_exit->funcs` 槽位。
+V2505A 的三个精确内核 profile（6.12.23、6.12.58 OS6、6.12.58 OS7）共用单入口二进制 `libv2505a.so`；同一份 C plant 以 `-DV2505A_MULTI` 编译，运行时按完整 `uname -r` 选择常量，不复用 `t98260`、`t61269` 的常量。它会在唤醒 root 子进程前清零 `vr.ko` 使用的 `__tracepoint_sys_exit->funcs` 槽位。
 
 - **快路径** plant 约 2–3 秒、全流程约 4–9 秒；回收未命中时会多花几秒，属正常波动。
 - **任一链失败后**：plant 持有的页会转交给 holder，同一 boot 可直接再点一次；不要手工 kill 或 reap holder。
@@ -51,8 +51,6 @@ V2505A 使用独立的单入口二进制 `libv2505a`（6.12.23）、`libv2505a_6
 ## 运行方式
 
 - **6.18.21** → CVE-2026-98260-6.18（`libt98260.so`）；**6.12.69** → CVE-2026-98260-6.12（`libt61269.so`）。
-- **V2505A 精确内核（6.12.23）** → CVE-2026-98260-vivo-V2505A（`libv2505a.so`）；这是第三个独立单入口，额外处理 vivo `vr.ko`，不复用前两条工具。
-- **6.12.58（iQOO 15 新 OS6）** → CVE-2026-98260-vivo-V2505A-6.12.58（`libv2505a_61258.so`）；同样处理 vivo `vr.ko`，沿用 V2505A 的 SUSFS/通用切换接线。
-- **6.12.58（iQOO 15 OS7）** → CVE-2026-98260-vivo-V2505A-6.12.58-OS7（`libv2505a_61258_os7.so`）；同样处理 vivo `vr.ko`，沿用 V2505A 的 SUSFS/通用切换接线。
+- **V2505A（6.12.23 / 6.12.58 OS6 / 6.12.58 OS7）** → 三个精确内核 profile 共用 `libv2505a.so`；App 按完整 `uname -r` 选中对应标签，二进制内部再选同一 profile；均处理 vivo `vr.ko`，沿用 SUSFS/通用切换接线。
 - 五个入口都直接以 App 原生库（`nativeLibraryDir`）原地运行，不向 `/data/local/tmp` 部署工具；ksud 也从未安装的管理器 APK 原地执行。SUSFS 五个入口都支持（6.12/V2505A 使用 `libsusfs_guard_lkm_612.so`），VFS 开关仅对 6.18 入口开放。
 - 仅用于自有设备的系统研究。

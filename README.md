@@ -59,7 +59,7 @@ KernelSU、KernelSU-Next、BakaSU、SukiSU Ultra、FinaSU 五家。
 ## 能做什么
 
 - **一键临时 Root**：打开 App 后不需要手动选漏洞，它会根据 `uname -r`
-  自动匹配 6.18.21 / 6.12.69 / V2505A 6.12.23 / V2505A 6.12.58 OS6 / V2505A 6.12.58 OS7 五条链。点一次「一键越狱」即可完成提权、
+  自动匹配 6.18.21 / 6.12.69 / V2505A（6.12.23、6.12.58 OS6/OS7 共用一个 so）五条链。点一次「一键越狱」即可完成提权、
   `ksud late-load`、模块安装和管理器拉起；临时 Root 在重启后消失，下次
   开机重新执行即可。
 - **五家管理器可选**：ROOT 管理器下拉直接选择 KernelSU、KernelSU-Next、
@@ -125,9 +125,7 @@ Shark/
 │   ├── app/src/main/jniLibs/arm64-v8a/
 │   │   ├── libt98260.so         6.18 runner
 │   │   ├── libt61269.so         6.12.69 runner
-│   │   ├── libv2505a.so         V2505A 6.12.23 runner
-│   │   ├── libv2505a_61258.so   V2505A 6.12.58 OS6 runner
-│   │   ├── libv2505a_61258_os7.so V2505A 6.12.58 OS7 runner
+│   │   ├── libv2505a.so         V2505A 6.12.23/6.12.58 OS6/OS7 runner
 │   │   ├── libksud_universal.so 双 KMI 通用 loader
 │   │   ├── libsusfs_guard_lkm.so
 │   │   ├── libsusfs_guard_lkm_612.so
@@ -136,7 +134,7 @@ Shark/
 │   └── gradle/、keystore/
 ├── exploit/
 │   ├── rust-t98260/             6.18 Rust runner
-│   ├── rust-t61269/             6.12 / V2505A / V2505A-6.12.58 OS6/OS7 Rust runner
+│   ├── rust-t61269/             6.12 / V2505A multi-profile Rust runner
 │   └── src/                     C plant（98260 核心）
 ├── lkm/
 │   ├── susfs4ksu-lkm/           SUSFS guard 源码

