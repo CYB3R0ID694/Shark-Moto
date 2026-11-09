@@ -436,6 +436,7 @@ class MainActivity : ComponentActivity() {
             kernelVersion == V2505A_KERNEL_RELEASE &&
                 Build.MANUFACTURER.equals("vivo", ignoreCase = true) -> ExploitKind.CVE2505A
             kernelVersion.contains("6.12.69") -> ExploitKind.CVE61269
+            kernelVersion.contains("6.12.38") -> ExploitKind.CVE61238
             else -> ExploitKind.CVE98260
         }
         if (manager == ManagerKind.DYNAMIC && !supportsUniversal()) {
@@ -2451,6 +2452,7 @@ class MainActivity : ComponentActivity() {
                 val cmd = when (exploit) {
                     ExploitKind.CVE98260 -> arrayOf("$nativeDir/libt98260.so", "run")
                     ExploitKind.CVE61269 -> arrayOf("$nativeDir/libt61269.so", "run")
+                    ExploitKind.CVE61238 -> arrayOf("$nativeDir/libt61238.so", "run")
                     ExploitKind.CVE2505A -> arrayOf("$nativeDir/libv2505a.so", "run")
                 }
                 val rc = runStreaming(cmd, nativeDir)
@@ -2486,7 +2488,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun runStreaming(cmd: Array<String>, dir: String): Int {
-        val susfsKo = if (exploit == ExploitKind.CVE61269 || exploit == ExploitKind.CVE2505A) {
+        val susfsKo = if (exploit == ExploitKind.CVE61269 ||
+            exploit == ExploitKind.CVE61238 || exploit == ExploitKind.CVE2505A
+        ) {
             "${applicationInfo.nativeLibraryDir}/libsusfs_guard_lkm_612.so"
         } else {
             "${applicationInfo.nativeLibraryDir}/libsusfs_guard_lkm.so"
@@ -2546,6 +2550,7 @@ class MainActivity : ComponentActivity() {
     private enum class ExploitKind(val fullLabel: String) {
         CVE98260("CVE-2026-98260-6.18"),
         CVE61269("CVE-2026-98260-6.12"),
+        CVE61238("CVE-2026-98260-6.12.38"),
         CVE2505A("CVE-2026-98260-vivo-V2505A")
     }
 
@@ -2561,6 +2566,7 @@ class MainActivity : ComponentActivity() {
     private fun supportsUniversal(): Boolean =
         exploit == ExploitKind.CVE98260 ||
             exploit == ExploitKind.CVE61269 ||
+            exploit == ExploitKind.CVE61238 ||
             exploit == ExploitKind.CVE2505A
 
     private fun managerChoices(): List<ManagerKind> =
