@@ -437,6 +437,8 @@ class MainActivity : ComponentActivity() {
                 Build.MANUFACTURER.equals("vivo", ignoreCase = true) -> ExploitKind.CVE2505A
             kernelVersion == V2505A_61258_KERNEL_RELEASE &&
                 Build.MANUFACTURER.equals("vivo", ignoreCase = true) -> ExploitKind.CVE2505A_61258
+            kernelVersion == V2505A_61258_OS7_KERNEL_RELEASE &&
+                Build.MANUFACTURER.equals("vivo", ignoreCase = true) -> ExploitKind.CVE2505A_61258_OS7
             kernelVersion.contains("6.12.69") -> ExploitKind.CVE61269
             else -> ExploitKind.CVE98260
         }
@@ -2455,6 +2457,7 @@ class MainActivity : ComponentActivity() {
                     ExploitKind.CVE61269 -> arrayOf("$nativeDir/libt61269.so", "run")
                     ExploitKind.CVE2505A -> arrayOf("$nativeDir/libv2505a.so", "run")
                     ExploitKind.CVE2505A_61258 -> arrayOf("$nativeDir/libv2505a_61258.so", "run")
+                    ExploitKind.CVE2505A_61258_OS7 -> arrayOf("$nativeDir/libv2505a_61258_os7.so", "run")
                 }
                 val rc = runStreaming(cmd, nativeDir)
                 exit = rc
@@ -2490,7 +2493,8 @@ class MainActivity : ComponentActivity() {
 
     private fun runStreaming(cmd: Array<String>, dir: String): Int {
         val susfsKo = if (exploit == ExploitKind.CVE61269 ||
-            exploit == ExploitKind.CVE2505A || exploit == ExploitKind.CVE2505A_61258
+            exploit == ExploitKind.CVE2505A || exploit == ExploitKind.CVE2505A_61258 ||
+            exploit == ExploitKind.CVE2505A_61258_OS7
         ) {
             "${applicationInfo.nativeLibraryDir}/libsusfs_guard_lkm_612.so"
         } else {
@@ -2552,7 +2556,8 @@ class MainActivity : ComponentActivity() {
         CVE98260("CVE-2026-98260-6.18"),
         CVE61269("CVE-2026-98260-6.12"),
         CVE2505A("CVE-2026-98260-vivo-V2505A"),
-        CVE2505A_61258("CVE-2026-98260-vivo-V2505A-6.12.58")
+        CVE2505A_61258("CVE-2026-98260-vivo-V2505A-6.12.58"),
+        CVE2505A_61258_OS7("CVE-2026-98260-vivo-V2505A-6.12.58-OS7")
     }
 
     private enum class ManagerKind(val fullLabel: String, val pkg: String, val manager: String) {
@@ -2568,7 +2573,8 @@ class MainActivity : ComponentActivity() {
         exploit == ExploitKind.CVE98260 ||
             exploit == ExploitKind.CVE61269 ||
             exploit == ExploitKind.CVE2505A ||
-            exploit == ExploitKind.CVE2505A_61258
+            exploit == ExploitKind.CVE2505A_61258 ||
+            exploit == ExploitKind.CVE2505A_61258_OS7
 
     private fun managerChoices(): List<ManagerKind> =
         if (supportsUniversal()) ManagerKind.entries
@@ -2583,5 +2589,7 @@ class MainActivity : ComponentActivity() {
             "6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k"
         private const val V2505A_61258_KERNEL_RELEASE =
             "6.12.58-android16-6-g0a092cc0037a-abogki521987229-4k"
+        private const val V2505A_61258_OS7_KERNEL_RELEASE =
+            "6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k"
     }
 }

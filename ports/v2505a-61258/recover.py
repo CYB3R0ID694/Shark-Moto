@@ -122,25 +122,39 @@ class Image:
 
     def _finish(self, n, names_start, syms, names_end):
         d = self.d
-        # offsets array: monotonic s32 array of n entries followed by
-        # kallsyms_relative_base
+        # The offsets array can be padded/unaligned relative to the base;
+        # scan a small window around base - 4*n for a monotonic s32 array
+        # whose first offset is 0.
         needle = struct.pack('<Q', 0xffffffc080000000)
-        for pos in range(len(d) - 8, 0, -8):
-            if d[pos:pos + 8] != needle:
-                continue
-            st = pos - 4 * n
-            if st < 0:
-                continue
-            offs = struct.unpack_from('<%di' % n, d, st)
-            bad = sum(1 for i in range(n - 1) if offs[i] > offs[i + 1])
-            if bad == 0:
-                self.n, self.base, self.offs = n, 0xffffffc080000000, offs
-                self.sym = [s[1:].decode('latin1') for s in syms]
-                self.typ = [s[:1].decode('latin1') for s in syms]
-                print('kallsyms: n=%d names=%#x..%#x offsets=%#x base=%#x '
-                      'monotonic=OK' % (n, names_start, names_end, st, self.base))
-                return
-        raise SystemExit('kallsyms offsets not located')
+        best = None
+        pos = d.find(needle)
+        while pos >= 0:
+            for delta in range(-0x2000, 0x2001, 4):
+                st = pos - 4 * n + delta
+                if st < 0 or st + 4 * n > len(d):
+                    continue
+                o0 = struct.unpack_from('<i', d, st)[0]
+                if o0 != 0:
+                    continue
+                oN = struct.unpack_from('<i', d, st + 4 * (n - 1))[0]
+                if not (0x1000000 <= oN <= 0x4000000):
+                    continue
+                offs = struct.unpack_from('<%di' % n, d, st)
+                bad = sum(1 for i in range(n - 1) if offs[i] > offs[i + 1])
+                if bad:
+                    continue
+                score = abs((st + 4 * n) - pos)
+                if best is None or score < best[0]:
+                    best = (score, pos, st, offs)
+            pos = d.find(needle, pos + 1)
+        if best is None:
+            raise SystemExit('kallsyms offsets not located')
+        _, pos, st, offs = best
+        self.n, self.base, self.offs = n, 0xffffffc080000000, offs
+        self.sym = [s[1:].decode('latin1') for s in syms]
+        self.typ = [s[:1].decode('latin1') for s in syms]
+        print('kallsyms: n=%d names=%#x..%#x offsets=%#x base=%#x '
+              'monotonic=OK' % (n, names_start, names_end, st, self.base))
 
     def addr(self, name):
         try:
