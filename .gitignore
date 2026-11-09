@@ -32,3 +32,8 @@ ports/v2505a/app/
 ports/v2505a/**/__pycache__/
 ports/v2505a/**/*.py[cod]
 ports/v2505a/tools/vendor/
+
+# PLZ110 6.12.58 local analysis inputs
+ports/plz110-61258/__pycache__/
+ports/plz110-61258/*.py[cod]
+ports/plz110-61258/work/
