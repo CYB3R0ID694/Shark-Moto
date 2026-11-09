@@ -62,6 +62,7 @@ android {
             keepDebugSymbols.add("**/libt98260.so")
             keepDebugSymbols.add("**/libksud_universal.so")
             keepDebugSymbols.add("**/libt61269.so")
+            keepDebugSymbols.add("**/libt61258.so")
             keepDebugSymbols.add("**/libv2505a.so")
             keepDebugSymbols.add("**/libsusfs_guard_lkm.so")
             keepDebugSymbols.add("**/libsusfs_guard_lkm_612.so")
