@@ -141,7 +141,7 @@ Shark/
 │   └── gradle/、keystore/
 ├── exploit/
 │   ├── rust-k61821/             6.18.21 Rust runner
-│   ├── rust-k61269/             6.12 / 6.6 Rust runner（feature 选 K 源文件）
+│   ├── rust-kplant/             6.12 / 6.6 Rust runner（feature 选 K 源文件）
 │   └── src/                     plant_core.inc + K<版本>_plant.c（每内核一份）
 ├── lkm/
 │   ├── susfs4ksu-lkm/           SUSFS guard 源码
@@ -193,7 +193,7 @@ export ANDROID_NDK_HOME=/path/to/ndk
 也可以单独构建某一档：
 
 ```bash
-cd exploit/rust-k61269
+cd exploit/rust-kplant
 cargo build --release --target aarch64-linux-android \
     --no-default-features --features k66118
 ```

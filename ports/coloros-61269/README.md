@@ -51,7 +51,7 @@ probe 阶段运行时选择对应的调用点，老机型不受影响。
 
 ## 运行时选择
 
-`exploit/src/t61269_plant.c` 的 6.12.69 默认档改为运行时变量：
+`exploit/src/K61269_plant.c` 里 6.12.69 的两个构建按运行时变量选择：
 
 - `select_61269_profile(release)` 按构建后缀二选一，probe 打印
   `PROFILE_61269 site=… low21=… task_low21=…`
