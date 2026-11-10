@@ -1,4 +1,4 @@
-package com.pyb110.onekey
+package com.shark.kty
 
 import android.content.Context
 import android.content.pm.PackageManager

@@ -13,7 +13,7 @@ plugins {
 }
 
 android {
-    namespace = "com.pyb110.onekey"
+    namespace = "com.shark.kty"
     compileSdk {
         version = release(37) {
             minorApiLevel = 0
@@ -21,11 +21,11 @@ android {
     }
     buildToolsVersion = "37.0.0"
     defaultConfig {
-        applicationId = "com.pyb110.onekey"
+        applicationId = "com.shark.kty"
         minSdk = 33
         targetSdk = 37
-        versionCode = 90
-        versionName = "2.0"
+        versionCode = 91
+        versionName = "2.1"
         ndk {
             abiFilters.add("arm64-v8a")
         }

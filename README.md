@@ -134,7 +134,7 @@ Shark 由 Android App、设备端 exploit runner 和可选的内核模块组成�
 ```text
 Shark/
 ├── app/                         Android App（Gradle 工程）
-│   ├── app/src/main/java/com/pyb110/onekey/
+│   ├── app/src/main/java/com/shark/kty/
 │   │   ├── MainActivity.kt      四个 tab、流程控制、管理器与拓展状态
 │   │   ├── UpdateChecker.kt     Gitee / GitHub 更新检查
 │   │   ├── HistoryStore.kt      日志落盘、历史记录
