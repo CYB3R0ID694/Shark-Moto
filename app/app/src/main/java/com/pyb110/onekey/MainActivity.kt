@@ -2418,6 +2418,16 @@ class MainActivity : ComponentActivity() {
             var success = false
             var exit = -1
             try {
+                if (exploit == ExploitKind.UNSUPPORTED) {
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            applicationContext,
+                            "当前机型/内核不受支持：$kernelVersion",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@launch
+                }
                 if (PrivService.pick() == null) {
                     addLog("No privileged backend (Stellar/Shizuku) running")
                     return@launch
