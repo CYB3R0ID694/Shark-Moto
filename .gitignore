@@ -32,3 +32,5 @@ ports/v2505a/app/
 ports/v2505a/**/__pycache__/
 ports/v2505a/**/*.py[cod]
 ports/v2505a/tools/vendor/
+
+exploit/target/
