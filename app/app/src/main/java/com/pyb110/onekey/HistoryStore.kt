@@ -2,6 +2,7 @@ package com.pyb110.onekey
 
 import android.content.Context
 import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -29,15 +30,27 @@ object HistoryStore {
     private fun dir(context: Context): File =
         File(context.filesDir, "history").apply { mkdirs() }
 
+    /* Explicit fsync: the run can end in a kernel panic, and page-cache
+     * contents are lost on the reboot. */
+    private fun writeDurable(f: File, text: String, append: Boolean) {
+        runCatching {
+            FileOutputStream(f, append).use { os ->
+                os.write(text.toByteArray())
+                os.flush()
+                os.fd.sync()
+            }
+        }
+    }
+
     fun start(context: Context, manager: String, exploit: String, kernel: String, model: String): File {
         val f = File(dir(context), "${fileFmt.format(Date())}.log")
         synchronized(lock) {
-            runCatching {
-                f.writeText(
-                    "MANAGER=$manager\nEXPLOIT=$exploit\nKERNEL=$kernel\nMODEL=$model\n" +
-                        "START=${displayFmt.format(Date())}\n"
-                )
-            }
+            writeDurable(
+                f,
+                "MANAGER=$manager\nEXPLOIT=$exploit\nKERNEL=$kernel\nMODEL=$model\n" +
+                    "START=${displayFmt.format(Date())}\n",
+                false
+            )
             current = f
         }
         return f
@@ -46,18 +59,18 @@ object HistoryStore {
     fun append(line: String) {
         synchronized(lock) {
             val f = current ?: return
-            runCatching { f.appendText(line + "\n") }
+            writeDurable(f, line + "\n", true)
         }
     }
 
     fun finish(success: Boolean, exit: Int, durationMs: Long) {
         synchronized(lock) {
             val f = current ?: return
-            runCatching {
-                f.appendText(
-                    "RESULT=${if (success) "SUCCESS" else "FAIL"}\nEXIT=$exit\nDURATION=${durationMs}ms\n"
-                )
-            }
+            writeDurable(
+                f,
+                "RESULT=${if (success) "SUCCESS" else "FAIL"}\nEXIT=$exit\nDURATION=${durationMs}ms\n",
+                true
+            )
             current = null
         }
     }

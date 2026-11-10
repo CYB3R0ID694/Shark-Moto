@@ -2506,6 +2506,7 @@ class MainActivity : ComponentActivity() {
             "PYB110_VFS=${if (vfsSupport) "1" else "0"}" +
             "PYB110_UNIVERSAL=${if (universal) "1" else "0"}" +
             "PYB110_UNIVERSAL_KSUD=${applicationInfo.nativeLibraryDir}/libksud_universal.so" +
+            "PYB110_FILES_DIR=${filesDir.absolutePath}" +
             "PYB110_SUSFS_KO=$susfsKo" +
             "PYB110_VFS_KO=${applicationInfo.nativeLibraryDir}/libhybridmount.so"
         val p = PrivService.newProcess(cmd, env, dir)
