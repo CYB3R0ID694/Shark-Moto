@@ -49,7 +49,6 @@ SukiSU Ultra 或 FinaSU 的 root 环境。
 | OPPO Pad 5 Pro（OPD2511） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
 | Realme GT8 Pro（RMX5200） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
 | iQOO 15（V2505A） | OriginOS 6/7 | `6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k`<br>`6.12.58-android16-6-g0a092cc0037a-abogki521987229-4k`<br>`6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k` |
-| vivo X200 Ultra（PD2454） | OriginOS 7 | `6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k`（待真机验证） |
 | OPPO Find X8 Ultra（PKJ110） | ColorOS 17 | `6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k` |
 
 > 6.12.69 线的两个 OTA 内核构建均可直接使用；`libk61269.so` 在 probe 阶段按 `uname -r` 自动选择调用点；App 也只按精确 `uname -r` 匹配入口，未匹配时点击越狱直接提示机型不受支持。
@@ -134,7 +133,6 @@ Shark/
 │   │   ├── libk61258.so         6.12.58 runner（PLZ110 + V2505A OS6/OS7）
 │   │   ├── libk61223.so         6.12.23 runner（V2505A）
 │   │   ├── libk66118.so         6.6.118 runner
-│   │   ├── libk66127.so         6.6.127 runner
 │   │   ├── libksud_universal.so 双 KMI 通用 loader
 │   │   ├── libsusfs_guard_lkm.so
 │   │   ├── libsusfs_guard_lkm_612.so
@@ -151,7 +149,6 @@ Shark/
 │   └── susfs-tools/             SUSFS 规则工具
 ├── docs/screenshots/            README 截图
 ├── ports/v2505a/                V2505A 说明与验证记录
-├── ports/pd2454-66127/          PD2454 6.6.127 说明与验证记录
 ├── ports/coloros-61269/         6.12.69 双 OTA 构建说明与恢复工具
 ├── ports/pkj110-66118/          PKJ110 6.6.118 说明与验证记录
 ├── third_party/                 第三方许可与材料
@@ -167,7 +164,6 @@ Shark/
   `ksud late-load` 与收尾。
 - `lkm/`：SUSFS guard 和 Hybrid Mount VFS provider 的源码与构建脚本。
 - `ports/v2505a/`：V2505A 分支的说明、常量和验证记录。
-- `ports/pd2454-66127/`：PD2454 6.6.127 的常量恢复脚本与验证记录。
 - `third_party/`：第三方许可全文与参考材料。
 
 **技术栈**
@@ -202,7 +198,7 @@ cargo build --release --target aarch64-linux-android \
     --no-default-features --features k66118
 ```
 
-可用的 feature：`k61269`、`k61238`、`k61258`、`k61223`、`k66118`、`k66127`；
+可用的 feature：`k61269`、`k61238`、`k61258`、`k61223`、`k66118`；
 6.18.21 由 `rust-t98260` 单独构建。
 
 通用 KO 和双 KMI loader 在
