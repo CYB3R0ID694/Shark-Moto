@@ -133,14 +133,63 @@ class Image:
                 continue
             offs = struct.unpack_from('<%di' % n, d, st)
             bad = sum(1 for i in range(n - 1) if offs[i] > offs[i + 1])
-            if bad == 0:
+            # vendor builds may append a zero sentinel entry
+            if bad <= 4:
                 self.n, self.base, self.offs = n, 0xffffffc080000000, offs
                 self.sym = [s[1:].decode('latin1') for s in syms]
                 self.typ = [s[:1].decode('latin1') for s in syms]
+                sh = self.detect_shift()
+                if sh > 0:
+                    self.sym = self.sym[sh:] + [''] * sh
+                elif sh < 0:
+                    self.sym = [''] * (-sh) + self.sym[:sh]
                 print('kallsyms: n=%d names=%#x..%#x offsets=%#x base=%#x '
-                      'monotonic=OK' % (n, names_start, names_end, st, self.base))
+                      'monotonic=OK shift=%+d'
+                      % (n, names_start, names_end, st, self.base, sh))
                 return
         raise SystemExit('kallsyms offsets not located')
+
+    def _shifted(self, i, sh):
+        j = i + sh
+        return self.sym[j] if 0 <= j < len(self.sym) else ''
+
+    def detect_shift(self):
+        """Some vendor builds prepend an extra entry to the names blob, so
+        names[i] pairs with offsets[i+1].  Score candidate shifts against the
+        __ksymtab entries, whose PREL32 name/value must agree with kallsyms."""
+        import bisect
+        best, best_ok = 0, -1
+        for sh in range(-3, 4):
+            ok = bad = 0
+            for i in range(self.n):
+                nm = self._shifted(i, sh)
+                if not nm.startswith('__ksymtab_'):
+                    continue
+                a = self.base + self.offs[i]
+                o = a - self.base
+                if o < 0 or o + 12 > len(self.d):
+                    continue
+                vo, no, _ns = struct.unpack_from('<iii', self.d, o)
+                vaddr = a + vo
+                naddr = a + 4 + no - self.base
+                if not 0 <= naddr < len(self.d):
+                    continue
+                end = self.d.find(b'\x00', naddr)
+                if end < 0:
+                    continue
+                inner = self.d[naddr:end].decode('latin1')
+                k = bisect.bisect_left(self.offs, vaddr - self.base)
+                if k >= self.n or self.offs[k] != vaddr - self.base:
+                    bad += 1
+                    continue
+                nm2 = self._shifted(k, sh)
+                if nm2.strip('_') == inner.strip('_') or nm2.endswith(inner):
+                    ok += 1
+                else:
+                    bad += 1
+            if ok + bad >= 50 and ok > bad and ok > best_ok:
+                best, best_ok = sh, ok
+        return best
 
     def addr(self, name):
         try:

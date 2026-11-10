@@ -437,6 +437,7 @@ class MainActivity : ComponentActivity() {
                 Build.MANUFACTURER.equals("vivo", ignoreCase = true) -> ExploitKind.CVE2505A
             kernelVersion.contains("6.12.69") -> ExploitKind.CVE61269
             kernelVersion.contains("6.6.127") -> ExploitKind.CVE66127
+            kernelVersion.contains("6.6.118") -> ExploitKind.CVE66118
             else -> ExploitKind.CVE98260
         }
         if (manager == ManagerKind.DYNAMIC && !supportsUniversal()) {
@@ -2455,6 +2456,7 @@ class MainActivity : ComponentActivity() {
                     ExploitKind.CVE98260 -> arrayOf("$nativeDir/libt98260.so", "run")
                     ExploitKind.CVE61269 -> arrayOf("$nativeDir/libt61269.so", "run")
                     ExploitKind.CVE66127 -> arrayOf("$nativeDir/libt66127.so", "run")
+                    ExploitKind.CVE66118 -> arrayOf("$nativeDir/libt66118.so", "run")
                     ExploitKind.CVE2505A -> arrayOf("$nativeDir/libv2505a.so", "run")
                 }
                 val rc = runStreaming(cmd, nativeDir)
@@ -2553,6 +2555,7 @@ class MainActivity : ComponentActivity() {
         CVE98260("CVE-2026-98260-6.18"),
         CVE61269("CVE-2026-98260-6.12"),
         CVE66127("CVE-2026-98260-vivo-6.6.127"),
+        CVE66118("CVE-2026-98260-ColorOS-6.6.118"),
         CVE2505A("CVE-2026-98260-vivo-V2505A")
     }
 
@@ -2571,7 +2574,7 @@ class MainActivity : ComponentActivity() {
             exploit == ExploitKind.CVE2505A
 
     private fun supportsSusfs(): Boolean =
-        exploit != ExploitKind.CVE66127
+        exploit != ExploitKind.CVE66127 && exploit != ExploitKind.CVE66118
 
     private fun managerChoices(): List<ManagerKind> =
         if (supportsUniversal()) ManagerKind.entries

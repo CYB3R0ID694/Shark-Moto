@@ -49,6 +49,7 @@ SukiSU Ultra 或 FinaSU 的 root 环境。
 | Realme GT8 Pro（RMX5200） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k` |
 | iQOO 15（V2505A） | OriginOS 6 | `6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k` |
 | vivo X200 Ultra（PD2454） | OriginOS 7 | `6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k`（待真机验证） |
+| OPPO Find X8 Ultra（PKJ110） | ColorOS 17 | `6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k` |
 
 ## 支持的管理器
 
