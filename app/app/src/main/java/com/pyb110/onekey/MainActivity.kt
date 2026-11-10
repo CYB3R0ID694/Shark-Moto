@@ -2207,7 +2207,7 @@ class MainActivity : ComponentActivity() {
     private fun readDeviceState(): Pair<Boolean, String> {
         val p = PrivService.newProcess(
             arrayOf("sh", "-c", "if grep -qi kernelsu /proc/modules; then echo YES; elif timeout 3 su -c id 2>/dev/null | grep -q uid=0; then echo YES; else echo NO; fi; getenforce"),
-            shizukuEnv(), "/data/local/tmp"
+            shizukuEnv(), filesDir.absolutePath
         )
         val lines = p.getInputStream()
             .bufferedReader().readLines()
@@ -2283,7 +2283,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         val fallback = runCatching {
-            val p = PrivService.newProcess(arrayOf("su", "-c", script), shizukuEnv(), "/data/local/tmp")
+            val p = PrivService.newProcess(arrayOf("su", "-c", script), shizukuEnv(), filesDir.absolutePath)
             val out = p.getInputStream().bufferedReader().readText().trim()
             p.waitFor() to out
         }.getOrElse { -1 to (it.message ?: "root command failed") }
@@ -2394,8 +2394,8 @@ class MainActivity : ComponentActivity() {
 
     private fun shizukuEnv(): Array<String> = arrayOf(
         "PATH=/system/bin:/system/xbin:/data/adb/ksu/bin",
-        "HOME=/data/local/tmp",
-        "TMPDIR=/data/local/tmp"
+        "HOME=${filesDir.absolutePath}",
+        "TMPDIR=${filesDir.absolutePath}"
     )
 
     private fun launchManager() {
@@ -2436,7 +2436,7 @@ class MainActivity : ComponentActivity() {
                 val ksudPreflight = PrivService.newProcess(
                     arrayOf("sh", "-c",
                         "[ -n \"$(pm path '${manager.pkg}' 2>/dev/null)\" ] || [ -x /data/adb/ksu/bin/ksud ] || [ -x /data/adb/ksud ]"),
-                    shizukuEnv(), "/data/local/tmp"
+                    shizukuEnv(), filesDir.absolutePath
                 ).waitFor()
                 if (ksudPreflight != 0) {
                     addLog("Manager not installed: ${manager.pkg}. Install the manager APK first; ksud is executed from its APK, no bundled copy.")
@@ -2480,7 +2480,7 @@ class MainActivity : ComponentActivity() {
                     val rebootRc = runCatching {
                         PrivService.newProcess(
                             arrayOf("su", "-c", "setprop ctl.restart zygote"),
-                            shizukuEnv(), "/data/local/tmp"
+                            shizukuEnv(), filesDir.absolutePath
                         ).waitFor()
                     }.getOrDefault(-1)
                     if (rebootRc != 0) addLog("Soft reboot failed rc=$rebootRc")
