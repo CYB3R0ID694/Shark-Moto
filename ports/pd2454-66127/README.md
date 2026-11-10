@@ -122,7 +122,7 @@ python3 recover.py kernel.bin      # kernel.bin = boot.img[0x1000 : 0x1000+kerne
 cd exploit/rust-t61269
 cargo build --release --target aarch64-linux-android --features vivo_66127
 cp target/aarch64-linux-android/release/t61269 \
-   ../../app/app/src/main/jniLibs/arm64-v8a/libt66127.so
+   ../../app/app/src/main/jniLibs/arm64-v8a/libk66127.so
 ```
 
 `build.rs` 追加 `-DKERNEL_66127`，`Cargo.toml` 对应 `vivo_66127 = []`。
@@ -131,7 +131,7 @@ cp target/aarch64-linux-android/release/t61269 \
 
 - `ExploitKind.CVE66127("CVE-2026-98260-vivo-6.6.127")`，按 `uname -r` 含
   `6.6.127` 自动选中
-- 入口：`nativeLibraryDir/libt66127.so run`
+- 入口：`nativeLibraryDir/libk66127.so run`
 - `PYB110_KMI=android15-6.6`；普通模式从已安装管理器 APK 取 `ksud`/LKM，
   管理器必须支持 6.6.127 android15-6.6
 - **不启用 SUSFS**（没有 android15-6.6 的 guard KO）；**不启用 Dynamic Switching**
@@ -139,10 +139,10 @@ cp target/aarch64-linux-android/release/t61269 \
 
 ## 验证顺序
 
-1. 只读自检：`libt66127.so probe` → 期望 `PROBE_KERNEL`、`PROBE_TIMER ... low21=0x198000`、
+1. 只读自检：`libk66127.so probe` → 期望 `PROBE_KERNEL`、`PROBE_TIMER ... low21=0x198000`、
    `PROBE_TASK ... expected_low21=0xac790`、`PROBE_SLIDE ... aligned=1`、
    `PROBE_LINEAR_MAP`、`PROBE_CRED`、`PROBE_VR_TRACEPOINT=0x... funcs=0x... off=0x48`、`PROBE_OK`
-2. 完整链路：`libt66127.so run`，关注 `PLANT_CRED_OK` / `PARKED=1` / `MODULE_LOADED`
+2. 完整链路：`libk66127.so run`，关注 `PLANT_CRED_OK` / `PARKED=1` / `MODULE_LOADED`
 3. 冷重启后再跑一次；再验证管理器是否正常授权
 4. 失败一律留 holder（`t61269-hold`），**同 boot 不要强行重跑**，冷重启再试
 

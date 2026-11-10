@@ -2,7 +2,7 @@
 
 与 `rust-t61269` 同源、同一物理链路，只有 per-build 常量不同。
 **不改动 6.12.69 / 6.18.21 / V2505A / 6.6.127 既有入口**，新增
-`PKJ110_66118` 编译期分支和独立 `libt66118.so`。
+`PKJ110_66118` 编译期分支和独立 `libk66118.so`。
 
 这是 **android15-6.6** KMI（6.6.118），不是 6.12 的 android16-6/android16-5。
 与 6.6.127 同属 android15-8 GKI，但常量按本镜像重新恢复。
@@ -102,5 +102,5 @@ ColorOS 侧不走 6.6.127 的 `hooks_defend` 门（无 kread/白名单步骤）�
 - 机型：OPPO Find X8 Ultra（PKJ110），ColorOS 17
 - 内核：`6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k`
 - KMI：`android15-6.6`
-- 产物：`libt66118.so`（Cargo feature `pkj110_66118`），
+- 产物：`libk66118.so`（Cargo feature `pkj110_66118`），
   App 下拉项 `CVE-2026-98260-ColorOS-6.6.118`

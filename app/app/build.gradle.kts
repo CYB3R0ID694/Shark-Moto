@@ -59,11 +59,14 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-            keepDebugSymbols.add("**/libt98260.so")
+            keepDebugSymbols.add("**/libk61821.so")
             keepDebugSymbols.add("**/libksud_universal.so")
-            keepDebugSymbols.add("**/libt61269.so")
-            keepDebugSymbols.add("**/libt66127.so")
-            keepDebugSymbols.add("**/libv2505a.so")
+            keepDebugSymbols.add("**/libk61269.so")
+            keepDebugSymbols.add("**/libk66127.so")
+            keepDebugSymbols.add("**/libk61223.so")
+            keepDebugSymbols.add("**/libk61258.so")
+            keepDebugSymbols.add("**/libk61238.so")
+            keepDebugSymbols.add("**/libk66118.so")
             keepDebugSymbols.add("**/libsusfs_guard_lkm.so")
             keepDebugSymbols.add("**/libsusfs_guard_lkm_612.so")
             keepDebugSymbols.add("**/libhybridmount.so")

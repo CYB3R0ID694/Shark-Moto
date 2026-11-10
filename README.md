@@ -38,21 +38,21 @@ SukiSU Ultra 或 FinaSU 的 root 环境。
 | --- | --- | --- |
 | OnePlus 16（PYB110） | ColorOS 17 | `6.18.21-android17-5-gf957accaf563-ab15926176-4k`<br>`6.18.21-android17-5-g7fcbffcad3e1-ab16353812-4k` |
 | OnePlus 15（PLK110） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
-| OnePlus 15T（PLZ110） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
+| OnePlus 15T（PLZ110） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k`<br>`6.12.58-android16-6-g7704a1ae279b-ab15213644-4k` |
 | OnePlus Ace7 Pro（PMS110） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
 | OnePlus Ace7（PYF110） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
-| OnePlus Ace6T（PLR110） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
+| OnePlus Ace6T（PLR110） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k`<br>`6.12.38-android16-5-g844001fb8721-ab14552068-4k` |
 | OnePlus Pad3 Pro（OPD2513） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
 | OPPO Find X9 Ultra（PMA110） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
 | OPPO Find X9 Pro（PLG110） | ColorOS 17 | `6.12.69-android16-6-g5fd39602326e-ab16372235-4k`<br>`6.12.69-android16-6-g242e1a07f878-ab15865446-4k` |
 | OPPO Pad Mini（OPD2512） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
 | OPPO Pad 5 Pro（OPD2511） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
 | Realme GT8 Pro（RMX5200） | ColorOS 17 | `6.12.69-android16-6-g242e1a07f878-ab15865446-4k`<br>`6.12.69-android16-6-g5fd39602326e-ab16372235-4k` |
-| iQOO 15（V2505A） | OriginOS 6 | `6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k` |
+| iQOO 15（V2505A） | OriginOS 6/7 | `6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k`<br>`6.12.58-android16-6-g0a092cc0037a-abogki521987229-4k`<br>`6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k` |
 | vivo X200 Ultra（PD2454） | OriginOS 7 | `6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k`（待真机验证） |
 | OPPO Find X8 Ultra（PKJ110） | ColorOS 17 | `6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k` |
 
-> 6.12.69 线的两个 OTA 内核构建均可直接使用；`libt61269.so` 在 probe 阶段按 `uname -r` 自动选择调用点，未知构建直接拒绝。
+> 6.12.69 线的两个 OTA 内核构建均可直接使用；`libk61269.so` 在 probe 阶段按 `uname -r` 自动选择调用点；App 也只按精确 `uname -r` 匹配入口，未匹配时点击越狱直接提示机型不受支持。
 
 ## 支持的管理器
 
@@ -128,10 +128,13 @@ Shark/
 │   │   ├── HistoryStore.kt      日志落盘、历史记录
 │   │   └── DroidspacesModule.kt Droidspaces 模块下载
 │   ├── app/src/main/jniLibs/arm64-v8a/
-│   │   ├── libt98260.so         6.18 runner
-│   │   ├── libt61269.so         6.12.69 runner
-│   │   ├── libt66127.so         6.6.127 runner
-│   │   ├── libv2505a.so         V2505A runner
+│   │   ├── libk61821.so         6.18.21 runner
+│   │   ├── libk61269.so         6.12.69 runner（双 OTA 构建运行时选择）
+│   │   ├── libk61238.so         6.12.38 runner
+│   │   ├── libk61258.so         6.12.58 runner（PLZ110 + V2505A OS6/OS7）
+│   │   ├── libk61223.so         6.12.23 runner（V2505A）
+│   │   ├── libk66118.so         6.6.118 runner
+│   │   ├── libk66127.so         6.6.127 runner
 │   │   ├── libksud_universal.so 双 KMI 通用 loader
 │   │   ├── libsusfs_guard_lkm.so
 │   │   ├── libsusfs_guard_lkm_612.so
@@ -139,9 +142,9 @@ Shark/
 │   ├── app/src/main/assets/     manual.md、licenses、赞赏码
 │   └── gradle/、keystore/
 ├── exploit/
-│   ├── rust-t98260/             6.18 Rust runner
-│   ├── rust-t61269/             6.12 / 6.6.127 / V2505A Rust runner
-│   └── src/                     C plant（98260 核心）
+│   ├── rust-t98260/             6.18.21 Rust runner
+│   ├── rust-t61269/             6.12 / 6.6 Rust runner（feature 选 K 源文件）
+│   └── src/                     plant_core.inc + K<版本>_plant.c（每内核一份）
 ├── lkm/
 │   ├── susfs4ksu-lkm/           SUSFS guard 源码
 │   ├── hybridmount/             VFS provider 源码
@@ -149,6 +152,8 @@ Shark/
 ├── docs/screenshots/            README 截图
 ├── ports/v2505a/                V2505A 说明与验证记录
 ├── ports/pd2454-66127/          PD2454 6.6.127 说明与验证记录
+├── ports/coloros-61269/         6.12.69 双 OTA 构建说明与恢复工具
+├── ports/pkj110-66118/          PKJ110 6.6.118 说明与验证记录
 ├── third_party/                 第三方许可与材料
 ├── NOTICE / LICENSE
 └── README.md
@@ -182,16 +187,23 @@ cd app
 ./gradlew :app:assembleRelease
 ```
 
-设备端 runner：
+设备端 runner（每个内核一个 `libk<版本>.so`，自动装进 jniLibs）：
 
 ```bash
-cd exploit/rust-t98260
-cargo build --release --target aarch64-linux-android
-
-cd ../rust-t61269
-cargo build --release --target aarch64-linux-android
-cargo build --release --target aarch64-linux-android --features v2505a
+export ANDROID_NDK_HOME=/path/to/ndk
+./exploit/build-all.sh
 ```
+
+也可以单独构建某一档：
+
+```bash
+cd exploit/rust-t61269
+cargo build --release --target aarch64-linux-android \
+    --no-default-features --features k66118
+```
+
+可用的 feature：`k61269`、`k61238`、`k61258`、`k61223`、`k66118`、`k66127`；
+6.18.21 由 `rust-t98260` 单独构建。
 
 通用 KO 和双 KMI loader 在
 [KSU-Universal](https://github.com/Yunnijian/KSU-Universal) 里构建，

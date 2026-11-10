@@ -23,7 +23,7 @@ Shark 通过 Stellar 或 Shizuku 以 shell 身份驱动设备端 98260 exploit�
 
 **preflight**（内核 release / trace 通道）→ **98260 UAF**（fake cred / SELinux 零写）→ **cred 子进程一次性 ksud late-load** → 等模块与 su → **收尾**（ksud install、卸内核防护、SUSFS、VFS、截图恢复、拉起管理器）。
 
-V2505A 使用独立的单入口二进制 `libv2505a`（同一份 C plant 以 `-DV2505A` 编译），不复用 `t98260`、`t61269` 的常量。vivo 机型（V2505A / 6.6.127）都会在唤醒 root 子进程前清零 `vr.ko` 使用的 `__tracepoint_sys_exit->funcs` 槽位；6.6.127 的地址和偏移独立复算。
+每个内核版本有独立的 K 源文件和 `libk<版本>.so`；无源码级复用，共享引擎在 `plant_core.inc`。vivo 机型（6.12.23 / 6.12.58 vivo 构建 / 6.6.127）会在唤醒 root 子进程前清零 `vr.ko` 使用的 `__tracepoint_sys_exit->funcs` 槽位。
 
 - **快路径** plant 约 2–3 秒、全流程约 4–9 秒；回收未命中时会多花几秒，属正常波动。
 - **任一链失败后**：plant 持有的页会转交给 holder，同一 boot 可直接再点一次；不要手工 kill 或 reap holder。
@@ -50,8 +50,9 @@ V2505A 使用独立的单入口二进制 `libv2505a`（同一份 C plant 以 `-D
 
 ## 运行方式
 
-- **6.18.21** → CVE-2026-98260-6.18（`libt98260.so`）；**6.12.69** → CVE-2026-98260-6.12（`libt61269.so`）。
-- **6.6.127（vivo PD2454）** → CVE-2026-98260-vivo-6.6.127（`libt66127.so`）；KMI android15-6.6，独立常量，同样处理 vivo `vr.ko`。
-- **V2505A 精确内核** → CVE-2026-98260-vivo-V2505A（`libv2505a.so`）；这是第四个独立单入口，额外处理 vivo `vr.ko`，不复用前几条工具。
+- **6.18.21** → `libk61821.so`；**6.12.69** → `libk61269.so`（两个 OTA 构建按 uname 选调用点）。
+- **6.12.38（PLR110）** → `libk61238.so`；**6.12.58（PLZ110 / V2505A OS6/OS7）** → `libk61258.so`；**6.12.23（V2505A）** → `libk61223.so`。
+- **6.6.118（PKJ110）** → `libk66118.so`；**6.6.127（PD2454）** → `libk66127.so`；KMI android15-6.6，独立常量，vivo 机型处理 `vr.ko`。
+- 以上全部按**精确 `uname -r`** 匹配；未匹配时点击「一键越狱」直接提示机型不受支持。
 - 四个入口都直接以 App 原生库（`nativeLibraryDir`）原地运行，不向 `/data/local/tmp` 部署工具；ksud 也从未安装的管理器 APK 原地执行。SUSFS 对 6.18/6.12/V2505A 三个入口支持（6.12/V2505A 使用 `libsusfs_guard_lkm_612.so`），6.6.127 暂不支持；VFS 开关仅对 6.18 入口开放。
 - 仅用于自有设备的系统研究。

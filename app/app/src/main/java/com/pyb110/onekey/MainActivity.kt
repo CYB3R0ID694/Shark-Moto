@@ -243,7 +243,7 @@ class MainActivity : ComponentActivity() {
     private var authorized by mutableStateOf(false)
     private var binderReady by mutableStateOf(false)
     private var ksuActive by mutableStateOf(false)
-    private var exploit by mutableStateOf(ExploitKind.CVE98260)
+    private var exploit by mutableStateOf(ExploitKind.UNSUPPORTED)
     private var manager by mutableStateOf(ManagerKind.KERNELSU)
     private var kernelVersion by mutableStateOf("未知")
     private var deviceModel by mutableStateOf("未知")
@@ -432,14 +432,7 @@ class MainActivity : ComponentActivity() {
         val savedManager = getSharedPreferences("pyb110", MODE_PRIVATE).getString("manager", null)
         manager = runCatching { ManagerKind.valueOf(savedManager ?: "") }.getOrDefault(ManagerKind.KERNELSU)
         kernelVersion = runCatching { android.system.Os.uname().release }.getOrDefault("未知")
-        exploit = when {
-            kernelVersion == V2505A_KERNEL_RELEASE &&
-                Build.MANUFACTURER.equals("vivo", ignoreCase = true) -> ExploitKind.CVE2505A
-            kernelVersion.contains("6.12.69") -> ExploitKind.CVE61269
-            kernelVersion.contains("6.6.127") -> ExploitKind.CVE66127
-            kernelVersion.contains("6.6.118") -> ExploitKind.CVE66118
-            else -> ExploitKind.CVE98260
-        }
+        exploit = PROFILE_BY_RELEASE[kernelVersion] ?: ExploitKind.UNSUPPORTED
         if (manager == ManagerKind.DYNAMIC && !supportsUniversal()) {
             manager = ManagerKind.KERNELSU
         }
@@ -1437,7 +1430,7 @@ class MainActivity : ComponentActivity() {
         ) {
             item {
                 Group {
-                    if (exploit != ExploitKind.CVE2505A) {
+                    if (!isVivoV2505a() && exploit != ExploitKind.UNSUPPORTED) {
                         SettingSwitchItem(
                             icon = Icons.Filled.NotificationsOff,
                             title = "越狱后禁用安全弹窗",
@@ -1468,7 +1461,7 @@ class MainActivity : ComponentActivity() {
                             onCheckedChange = { updateSusfsSupport(it) }
                         )
                     }
-                    if (exploit == ExploitKind.CVE98260) {
+                    if (exploit == ExploitKind.CVE61821) {
                         Divider(startIndent = itemDividerIndent(), color = colors.divider)
                         SettingSwitchItem(
                             icon = Icons.Filled.AccountTree,
@@ -1503,7 +1496,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
-            if (exploit == ExploitKind.CVE98260) {
+            if (exploit == ExploitKind.CVE61821) {
                 item {
                     Group {
                         SettingItem(
@@ -2429,18 +2422,7 @@ class MainActivity : ComponentActivity() {
                     addLog("No privileged backend (Stellar/Shizuku) running")
                     return@launch
                 }
-                val (alreadyActive, alreadySelinux) = readDeviceState()
-                if (exploit == ExploitKind.CVE2505A && alreadyActive) {
-                    exit = 0
-                    success = true
-                    withContext(Dispatchers.Main) {
-                        ksuActive = true
-                        selinuxText = alreadySelinux
-                    }
-                    addLog("ALREADY_LOADED: kernelsu present; skip exploit/load")
-                    if (!softReboot) withContext(Dispatchers.Main) { launchManager() }
-                    return@launch
-                }
+                val (alreadyActive, _) = readDeviceState()
                 val ksudPreflight = PrivService.newProcess(
                     arrayOf("sh", "-c",
                         "[ -n \"$(pm path '${manager.pkg}' 2>/dev/null)\" ] || [ -x /data/adb/ksu/bin/ksud ] || [ -x /data/adb/ksud ]"),
@@ -2453,11 +2435,23 @@ class MainActivity : ComponentActivity() {
                 val nativeDir = applicationInfo.nativeLibraryDir
                 addLog("Starting ${exploit.fullLabel}")
                 val cmd = when (exploit) {
-                    ExploitKind.CVE98260 -> arrayOf("$nativeDir/libt98260.so", "run")
-                    ExploitKind.CVE61269 -> arrayOf("$nativeDir/libt61269.so", "run")
-                    ExploitKind.CVE66127 -> arrayOf("$nativeDir/libt66127.so", "run")
-                    ExploitKind.CVE66118 -> arrayOf("$nativeDir/libt66118.so", "run")
-                    ExploitKind.CVE2505A -> arrayOf("$nativeDir/libv2505a.so", "run")
+                    ExploitKind.CVE61821 -> arrayOf("$nativeDir/libk61821.so", "run")
+                    ExploitKind.CVE61269 -> arrayOf("$nativeDir/libk61269.so", "run")
+                    ExploitKind.CVE61238 -> arrayOf("$nativeDir/libk61238.so", "run")
+                    ExploitKind.CVE61258 -> arrayOf("$nativeDir/libk61258.so", "run")
+                    ExploitKind.CVE61223 -> arrayOf("$nativeDir/libk61223.so", "run")
+                    ExploitKind.CVE66118 -> arrayOf("$nativeDir/libk66118.so", "run")
+                    ExploitKind.CVE66127 -> arrayOf("$nativeDir/libk66127.so", "run")
+                    ExploitKind.UNSUPPORTED -> null
+                } ?: run {
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            applicationContext,
+                            "当前机型/内核不受支持：$kernelVersion",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@launch
                 }
                 val rc = runStreaming(cmd, nativeDir)
                 exit = rc
@@ -2492,10 +2486,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun runStreaming(cmd: Array<String>, dir: String): Int {
-        val susfsKo = if (exploit == ExploitKind.CVE61269 || exploit == ExploitKind.CVE2505A) {
-            "${applicationInfo.nativeLibraryDir}/libsusfs_guard_lkm_612.so"
-        } else {
+        val susfsKo = if (exploit == ExploitKind.CVE61821) {
             "${applicationInfo.nativeLibraryDir}/libsusfs_guard_lkm.so"
+        } else {
+            "${applicationInfo.nativeLibraryDir}/libsusfs_guard_lkm_612.so"
         }
         val susfsActive = susfsSupport && supportsSusfs()
         val universal = dynamicSwitching && supportsUniversal()
@@ -2552,11 +2546,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private enum class ExploitKind(val fullLabel: String) {
-        CVE98260("CVE-2026-98260-6.18"),
-        CVE61269("CVE-2026-98260-6.12"),
-        CVE66127("CVE-2026-98260-vivo-6.6.127"),
-        CVE66118("CVE-2026-98260-ColorOS-6.6.118"),
-        CVE2505A("CVE-2026-98260-vivo-V2505A")
+        CVE61821("CVE-2026-98260-6.18"),
+        CVE61269("CVE-2026-98260-6.12.69"),
+        CVE61238("CVE-2026-98260-6.12.38"),
+        CVE61258("CVE-2026-98260-6.12.58"),
+        CVE61223("CVE-2026-98260-vivo-6.12.23"),
+        CVE66118("CVE-2026-98260-6.6.118"),
+        CVE66127("CVE-2026-98260-6.6.127"),
+        UNSUPPORTED("当前机型不支持")
     }
 
     private enum class ManagerKind(val fullLabel: String, val pkg: String, val manager: String) {
@@ -2568,13 +2565,21 @@ class MainActivity : ComponentActivity() {
         DYNAMIC("Dynamic Switching", "me.weishu.kernelsu", "kernelsu")
     }
 
+    private fun isVivoV2505a(): Boolean =
+        (exploit == ExploitKind.CVE61223 || exploit == ExploitKind.CVE61258) &&
+            kernelVersion.contains("abogki")
+
     private fun supportsUniversal(): Boolean =
-        exploit == ExploitKind.CVE98260 ||
+        exploit == ExploitKind.CVE61821 ||
             exploit == ExploitKind.CVE61269 ||
-            exploit == ExploitKind.CVE2505A
+            exploit == ExploitKind.CVE61238 ||
+            exploit == ExploitKind.CVE61258 ||
+            exploit == ExploitKind.CVE61223
 
     private fun supportsSusfs(): Boolean =
-        exploit != ExploitKind.CVE66127 && exploit != ExploitKind.CVE66118
+        exploit != ExploitKind.CVE66127 &&
+            exploit != ExploitKind.CVE66118 &&
+            exploit != ExploitKind.UNSUPPORTED
 
     private fun managerChoices(): List<ManagerKind> =
         if (supportsUniversal()) ManagerKind.entries
@@ -2585,7 +2590,18 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val REQ_SHIZUKU = 1001
-        private const val V2505A_KERNEL_RELEASE =
-            "6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k"
+        private val PROFILE_BY_RELEASE: Map<String, ExploitKind> = mapOf(
+            "6.18.21-android17-5-gf957accaf563-ab15926176-4k" to ExploitKind.CVE61821,
+            "6.18.21-android17-5-g7fcbffcad3e1-ab16353812-4k" to ExploitKind.CVE61821,
+            "6.12.69-android16-6-g242e1a07f878-ab15865446-4k" to ExploitKind.CVE61269,
+            "6.12.69-android16-6-g5fd39602326e-ab16372235-4k" to ExploitKind.CVE61269,
+            "6.12.38-android16-5-g844001fb8721-ab14552068-4k" to ExploitKind.CVE61238,
+            "6.12.58-android16-6-g7704a1ae279b-ab15213644-4k" to ExploitKind.CVE61258,
+            "6.12.58-android16-6-g0a092cc0037a-abogki521987229-4k" to ExploitKind.CVE61258,
+            "6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k" to ExploitKind.CVE61258,
+            "6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k" to ExploitKind.CVE61223,
+            "6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k" to ExploitKind.CVE66118,
+            "6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k" to ExploitKind.CVE66127
+        )
     }
 }
