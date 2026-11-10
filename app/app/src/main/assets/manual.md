@@ -2,14 +2,14 @@
 
 Shark 通过 Stellar 或 Shizuku 以 shell 身份驱动设备端 98260 exploit，加载管理器 LKM。首次使用先完成授权，再一键越狱。
 
-> Shark 目前支持欧加 6.18.21 内核设备（如一加 16）、欧真加 6.12.69 内核设备，以及单独适配的 vivo V2505A（内核 `6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k`）。V2505A 入口仅对该完整内核版本开放，当前只在 KernelSU 上完成实机验证。
+> Shark 目前支持 6.18.21、6.12.69、6.12.38、6.12.58、6.12.23 与 6.6.118 内核的欧加系设备，按完整 `uname -r` 精确匹配；未匹配的机型会提示不支持。
 
 ## 快速开始
 
 1. 先安装所选 ROOT 管理器（KernelSU / FinaSU / KernelSU Next / BakaSU / SukiSU Ultra），**暂不支持ci版本的 KernelSU Next**。
 2. 启动并使用**无线调试或者adb**激活 **Stellar（推荐）** 或 **Shizuku** 服务，并授予 Shark 权限。
-3. 回到 Shark 首页点「一键越狱」，等待成功日志。V2505A 入口以 `DONE`、`SU_ID_RC=0` 和 `uid=0(root)` 为准。
-4. 成功后管理器会自动拉起；开启对应开关时还会停用安全弹窗、加载 **SUSFS / VFS**（VFS 开关仅 6.18.21 显示；V2505A 只显示 SUSFS，使用 6.12 版 `libsusfs_guard_lkm_612.so`）。
+3. 回到 Shark 首页点「一键越狱」，等待成功日志；以 `DONE`、`SU_ID_RC=0` 和 `uid=0(root)` 为准。
+4. 成功后管理器会自动拉起；开启对应开关时还会停用安全弹窗、加载 **SUSFS**（6.18/6.12 线；6.12 使用 `libsusfs_guard_lkm_612.so`）或 **VFS**（仅 6.18.21）。
 5. 若日志显示 **MODULE NOT LOADED**，无需重启设备，直接再次尝试越狱即可。
 6. 每次进入 App 会自动检查更新：Gitee Releases 优先，GitHub 兜底；发现新版本会弹窗，可直接下载并交给系统安装器。也可在「关于」页手动点「检查更新」。
 
@@ -52,7 +52,7 @@ Shark 通过 Stellar 或 Shizuku 以 shell 身份驱动设备端 98260 exploit�
 
 - **6.18.21** → `libk61821.so`；**6.12.69** → `libk61269.so`（两个 OTA 构建按 uname 选调用点）。
 - **6.12.38（PLR110）** → `libk61238.so`；**6.12.58（PLZ110 / V2505A OS6/OS7）** → `libk61258.so`；**6.12.23（V2505A）** → `libk61223.so`。
-- **6.6.118（PKJ110）** → `libk66118.so`；KMI android15-6.6，独立常量。
+- **6.6.118（PKJ110 / PKH110 / Pad 等）** → `libk66118.so`（两个 OTA 构建按 uname 选调用点）；KMI android15-6.6。
 - 以上全部按**精确 `uname -r`** 匹配；未匹配时点击「一键越狱」直接提示机型不受支持。
 - 所有入口都直接以 App 原生库（`nativeLibraryDir`）原地运行，子进程 cwd/HOME/TMPDIR 都在 App filesDir，不向 `/data/local/tmp` 部署工具或写文件；ksud 也从已安装的管理器 APK 原地执行。SUSFS 对 6.18/6.12 线支持（6.12 使用 `libsusfs_guard_lkm_612.so`），6.6.118 不支持；VFS 开关仅对 6.18 入口开放。
 - 仅用于自有设备的系统研究。
