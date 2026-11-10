@@ -21,11 +21,11 @@ V2505A 已作为第三个独立入口合入 App，不复用 `t98260`、`t61269` 
 - `ExploitKind.CVE2505A` 只在厂商为 `vivo` 且内核完整 release
   等于 `6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k`
   时自动选择。
-- App 打包内容只有 jniLibs 的 `libv2505a.so`：Rust 单入口（同一
-  `exploit/rust-t61269` crate 以 `--features v2505a` 构建，`build.rs`
+- App 打包内容只有 jniLibs 的 `libk61223.so / libk61258.so`：Rust 单入口（同一
+  `exploit/rust-k61269` crate 以 `--features k61223` 构建，`build.rs`
   追加 `-DV2505A`），内嵌 C plant，从 `nativeLibraryDir` 原地执行；
   不再部署 `v2505a_run.sh` / 独立 plant 资产到 `/data/local/tmp`。
-- `libv2505a.so` 使用自己的 `ALREADY_LOADED` 和失败重试语义；失败的
+- `libk61223.so / libk61258.so` 使用自己的 `ALREADY_LOADED` 和失败重试语义；失败的
   plant 会转成 holder 保留现场，跳过 holder，同一 boot 可直接重试。
 - V2505A 入口隐藏不适用的反 root、卸载防护和 VFS 开关，只保留 SUSFS；
   SUSFS ko 从 `nativeLibraryDir` 的 `libsusfs_guard_lkm_612.so` 原地加载。
@@ -38,7 +38,7 @@ BUILD SUCCESSFUL
 ```
 
 APK 属于本地构建产物，不纳入版本控制。V2505A 由单入口
-`libv2505a.so` 内置（`exploit/rust-t61269 --features v2505a`）；
+`libk61223.so / libk61258.so` 内置（`exploit/rust-k61269 --features k61223`）；
 当前 V2505A 设备启动 App 后，信息卡会自动显示
 `CVE-2026-98260-vivo-V2505A`。
 
@@ -121,10 +121,10 @@ $env:ANDROID_NDK_HOME = "C:\path\to\android-ndk-r28c"
 独立 plant，而是按主 README 构建 Rust 单入口：
 
 ```bash
-cd exploit/rust-t61269
-cargo build --release --target aarch64-linux-android --features v2505a
+cd exploit/rust-k61269
+cargo build --release --target aarch64-linux-android --features k61223
 cp target/aarch64-linux-android/release/t61269 \
-  ../../app/app/src/main/jniLibs/arm64-v8a/libv2505a.so
+  ../../app/app/src/main/jniLibs/arm64-v8a/libk61223.so / libk61258.so
 ```
 
 `bin/v2505a_plant` 仅用于移植研究和 adb 手动验证。

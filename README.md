@@ -140,8 +140,8 @@ Shark/
 │   ├── app/src/main/assets/     manual.md、licenses、赞赏码
 │   └── gradle/、keystore/
 ├── exploit/
-│   ├── rust-t98260/             6.18.21 Rust runner
-│   ├── rust-t61269/             6.12 / 6.6 Rust runner（feature 选 K 源文件）
+│   ├── rust-k61821/             6.18.21 Rust runner
+│   ├── rust-k61269/             6.12 / 6.6 Rust runner（feature 选 K 源文件）
 │   └── src/                     plant_core.inc + K<版本>_plant.c（每内核一份）
 ├── lkm/
 │   ├── susfs4ksu-lkm/           SUSFS guard 源码
@@ -193,13 +193,13 @@ export ANDROID_NDK_HOME=/path/to/ndk
 也可以单独构建某一档：
 
 ```bash
-cd exploit/rust-t61269
+cd exploit/rust-k61269
 cargo build --release --target aarch64-linux-android \
     --no-default-features --features k66118
 ```
 
 可用的 feature：`k61269`、`k61238`、`k61258`、`k61223`、`k66118`；
-6.18.21 由 `rust-t98260` 单独构建。
+6.18.21 由 `rust-k61821` 单独构建。
 
 通用 KO 和双 KMI loader 在
 [KSU-Universal](https://github.com/Yunnijian/KSU-Universal) 里构建，
