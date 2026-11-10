@@ -63,7 +63,7 @@ KernelSU、KernelSU-Next、BakaSU、SukiSU Ultra、FinaSU 五家。
 ## 能做什么
 
 - **一键临时 Root**：打开 App 后不需要手动选漏洞，它会根据 `uname -r`
-  自动匹配 6.18.21 / 6.12.69 / 6.6.127 / V2505A 四条链。点一次「一键越狱」即可完成提权、
+  自动匹配 6.18.21 / 6.12.69 / 6.12.38 / 6.12.58 / 6.12.23 / 6.6.118 六条链。点一次「一键越狱」即可完成提权、
   `ksud late-load`、模块安装和管理器拉起；临时 Root 在重启后消失，下次
   开机重新执行即可。
 - **五家管理器可选**：ROOT 管理器下拉直接选择 KernelSU、KernelSU-Next、
@@ -209,7 +209,7 @@ Shark 只内置编译好的 `libksud_universal.so`。
 
 - Dynamic Switching 第一次要干净开机；之后切换管理器不用重启。
 - 普通模式必须先装对应管理器 APK，ksud 不从 Shark 内置。
-- 6.6.127（vivo X200 Ultra）使用 android15-6.6 KMI，普通模式需要管理器自带对应 LKM/ksud；该入口暂不支持 SUSFS 和 Dynamic Switching。
+- 6.6.118（PKJ110）使用 android15-6.6 KMI，普通模式需要管理器自带对应 LKM/ksud；该入口暂不支持 SUSFS、VFS 和 Dynamic Switching。
 - KPM 暂未启用。
 - CVE-2026-98260 是竞态 UAF，任何一次运行都可能导致内核 panic 或重启。
 - 只用于自己的设备，风险自负。
