@@ -74,9 +74,9 @@ Manager APKs are **not** bundled with Shark. Standard mode runs `ksud` directly 
 
 ## Features
 
-- **One-Click Temporary Root**: No manual exploit selection is needed — the app automatically matches one of six chains (`6.18.21` / `6.12.69` / `6.12.38` / `6.12.58` / `6.12.23` / `6.6.118`) by `uname -r`. Tap One-Click Root (`一键越狱`) once to complete privilege escalation, `ksud late-load`, module installation, and manager launch. Temporary root disappears on reboot; simply run it again after the next boot.
+- **One-Click Temporary Root**: No manual exploit selection is needed — the app automatically matches one of six chains (`6.18.21` / `6.12.69` / `6.12.38` / `6.12.58` / `6.12.23` / `6.6.118`) by `uname -r`. Tap **One-Click Root** once to complete privilege escalation, `ksud late-load`, module installation, and manager launch. Temporary root disappears on reboot; simply run it again after the next boot.
 - **Five Root Managers**: Choose KernelSU, KernelSU-Next, BakaSU, SukiSU Ultra, or FinaSU directly from the Root Manager dropdown. The app is not locked to any single manager; install your preferred manager APK beforehand and Standard mode will execute its own `ksud` and LKM.
-- **Hot-Switch Root Managers**: Supported on `6.18` and `6.12`. On a clean boot, select `Dynamic Switching` to load the universal KSU LKM (initialized as KernelSU), then select your target manager in Extras -> Hot-Switch Manager (`管理器热切换`). Switching updates the version code, features, private ioctl, and primary manager profile, then automatically relaunches the target manager without rebooting or re-exploiting.
+- **Hot-Switch Root Managers**: Supported on `6.18` and `6.12`. On a clean boot, select `Dynamic Switching` to load the universal KSU LKM (initialized as KernelSU), then select your target manager in **Extras → Hot-Switch Manager**. Switching updates the version code, features, private ioctl, and primary manager profile, then automatically relaunches the target manager without rebooting or re-exploiting.
 - **Extras**: Load VFS provider on `6.18`; load SUSFS on `6.12` / V2505A; plus toggles for anti-root popup suppression, post-root soft reboot, and unloading kernel security guards (OPPO/ColorOS-specific guards are skipped automatically on V2505A and Motorola). Enable as needed — a failure in an optional toggle does not affect the already completed root session.
 - **Live Logs & History**: Real-time scrolling execution logs. Every run saves a complete log to the History tab where it can be inspected, deleted, or swiped left to export and share.
 - **Online Updates**: Checks Gitee Releases on startup and falls back to GitHub; downloads new releases in-app and verifies SHA-256 and APK signature before handing off to the system installer.
@@ -94,7 +94,7 @@ Switching managers in Standard mode still requires a reboot.
 
 Select `Dynamic Switching` in the Root Manager dropdown. The app uses the bundled `libksud_universal.so` to load the universal KSU LKM, starting with KernelSU as the initial manager.
 
-Once loaded, the Hot-Switch Manager (`管理器热切换`) option appears under Extras: open the dropdown and pick the target manager. Selecting it switches immediately and relaunches the target manager app. Hot-switching only updates the in-kernel manager profile without unloading modules or rebooting.
+Once loaded, the **Hot-Switch Manager** option appears under **Extras**: open the dropdown and pick the target manager. Selecting it switches immediately and relaunches the target manager app. Hot-switching only updates the in-kernel manager profile without unloading modules or rebooting.
 
 Because the universal `.ko` shares the same module name and hooks as stock KSU, the initial load must happen on a clean boot without KSU already loaded; it cannot hot-replace an existing `kernelsu` module.
 
@@ -103,8 +103,8 @@ Because the universal `.ko` shares the same module name and hooks as stock KSU, 
 1. Install the manager APK you want to use. If you plan to use `Dynamic Switching`, installing all five managers is recommended.
 2. Start **Stellar** or **Shizuku** (via ADB or Wireless Debugging) and grant permission to Shark.
 3. Choose either a standard manager or `Dynamic Switching` from the Root Manager dropdown.
-4. Enable any optional toggles under Extras (`拓展功能`) if needed.
-5. Tap One-Click Root (`一键越狱`) and wait until `DONE` appears in the log.
+4. Enable any optional toggles under **Extras** if needed.
+5. Tap **One-Click Root** and wait until `DONE` appears in the log.
 6. In Standard mode, open your manager app to grant root access; in `Dynamic Switching` mode, select your target manager in Extras and Shark will switch to it and open it automatically.
 
 ## Project Structure
