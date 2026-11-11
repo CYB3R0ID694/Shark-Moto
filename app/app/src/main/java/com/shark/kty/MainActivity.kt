@@ -1431,13 +1431,15 @@ class MainActivity : ComponentActivity() {
             item {
                 Group {
                     if (!isVivoV2505a() && exploit != ExploitKind.UNSUPPORTED) {
-                        SettingSwitchItem(
-                            icon = Icons.Filled.NotificationsOff,
-                            title = "越狱后禁用安全弹窗",
-                            checked = antiRootGuard,
-                            onCheckedChange = { updateAntiRootGuard(it) }
-                        )
-                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        if (!isMotorolaDevice()) {
+                            SettingSwitchItem(
+                                icon = Icons.Filled.NotificationsOff,
+                                title = "越狱后禁用安全弹窗",
+                                checked = antiRootGuard,
+                                onCheckedChange = { updateAntiRootGuard(it) }
+                            )
+                            Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        }
                         SettingSwitchItem(
                             icon = Icons.Filled.RestartAlt,
                             title = "越狱后软重启",
@@ -1445,13 +1447,15 @@ class MainActivity : ComponentActivity() {
                             onCheckedChange = { updateSoftRebootAfter(it) }
                         )
                         Divider(startIndent = itemDividerIndent(), color = colors.divider)
-                        SettingSwitchItem(
-                            icon = Icons.Filled.RemoveModerator,
-                            title = "越狱后卸载内核安全防护",
-                            checked = unloadGuard,
-                            onCheckedChange = { updateUnloadGuard(it) }
-                        )
-                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        if (!isMotorolaDevice()) {
+                            SettingSwitchItem(
+                                icon = Icons.Filled.RemoveModerator,
+                                title = "越狱后卸载内核安全防护",
+                                checked = unloadGuard,
+                                onCheckedChange = { updateUnloadGuard(it) }
+                            )
+                            Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        }
                     }
                     if (supportsSusfs()) {
                         SettingSwitchItem(
@@ -2504,8 +2508,8 @@ class MainActivity : ComponentActivity() {
         val initialManager = if (manager == ManagerKind.DYNAMIC) ManagerKind.KERNELSU else manager
         val env = shizukuEnv() + "PYB110_DIR=$dir" + "PYB110_MANAGER=${initialManager.manager}" +
             "PYB110_LATE_LOAD=1" +
-            "PYB110_UNLOAD_GUARD=${if (unloadGuard) "1" else "0"}" +
-            "PYB110_DISABLE_ANTIROOT=${if (antiRootGuard) "1" else "0"}" +
+            "PYB110_UNLOAD_GUARD=${if (unloadGuard && !isMotorolaDevice()) "1" else "0"}" +
+            "PYB110_DISABLE_ANTIROOT=${if (antiRootGuard && !isMotorolaDevice()) "1" else "0"}" +
             "PYB110_SUSFS=${if (susfsActive) "1" else "0"}" +
             "PYB110_VFS=${if (vfsSupport) "1" else "0"}" +
             "PYB110_UNIVERSAL=${if (universal) "1" else "0"}" +
@@ -2576,6 +2580,9 @@ class MainActivity : ComponentActivity() {
         (exploit == ExploitKind.CVE61223 || exploit == ExploitKind.CVE61258) &&
             kernelVersion.contains("abogki")
 
+    private fun isMotorolaDevice(): Boolean =
+        Build.MANUFACTURER.equals("motorola", ignoreCase = true)
+
     private fun supportsUniversal(): Boolean =
         exploit == ExploitKind.CVE61821 ||
             exploit == ExploitKind.CVE61269 ||
@@ -2602,6 +2609,7 @@ class MainActivity : ComponentActivity() {
             "6.12.69-android16-6-g5fd39602326e-ab16372235-4k" to ExploitKind.CVE61269,
             "6.12.38-android16-5-g844001fb8721-ab14552068-4k" to ExploitKind.CVE61238,
             "6.12.58-android16-6-g7704a1ae279b-ab15213644-4k" to ExploitKind.CVE61258,
+            "6.12.58-android16-6-gb0a9599c6c01-ab14987696-4k" to ExploitKind.CVE61258,
             "6.12.58-android16-6-g0a092cc0037a-abogki521987229-4k" to ExploitKind.CVE61258,
             "6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k" to ExploitKind.CVE61258,
             "6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k" to ExploitKind.CVE61223,
