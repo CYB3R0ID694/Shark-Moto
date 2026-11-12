@@ -2610,6 +2610,7 @@ class MainActivity : ComponentActivity() {
             "6.12.38-android16-5-g844001fb8721-ab14552068-4k" to ExploitKind.CVE61238,
             "6.12.58-android16-6-g7704a1ae279b-ab15213644-4k" to ExploitKind.CVE61258,
             "6.12.58-android16-6-gb0a9599c6c01-ab14987696-4k" to ExploitKind.CVE61258,
+            "6.12.58-android16-6-g09eda8c8505a-ab15950084-4k" to ExploitKind.CVE61258,
             "6.12.58-android16-6-g0a092cc0037a-abogki521987229-4k" to ExploitKind.CVE61258,
             "6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k" to ExploitKind.CVE61258,
             "6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k" to ExploitKind.CVE61223,
