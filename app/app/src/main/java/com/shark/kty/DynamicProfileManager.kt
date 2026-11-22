@@ -127,14 +127,18 @@ object DynamicProfileManager {
                 readTimeout = 12000
                 setRequestProperty("User-Agent", "Shark-Moto-Sync")
             }
-            if (conn.responseCode != 200) {
-                throw IllegalStateException("HTTP ${conn.responseCode} while fetching profiles")
+            try {
+                if (conn.responseCode != 200) {
+                    throw IllegalStateException("HTTP ${conn.responseCode} while fetching profiles")
+                }
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                val loaded = loadFromJson(text)
+                val local = File(context.filesDir, FILE_NAME)
+                local.writeText(text)
+                loaded
+            } finally {
+                conn.disconnect()
             }
-            val text = conn.inputStream.bufferedReader().use { it.readText() }
-            val loaded = loadFromJson(text)
-            val local = File(context.filesDir, FILE_NAME)
-            local.writeText(text)
-            loaded
         }
     }
 }

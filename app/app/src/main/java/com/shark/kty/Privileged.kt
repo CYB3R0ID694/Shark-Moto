@@ -20,11 +20,17 @@ class PrivProcess(
     private val outS: OutputStream,
     private val errS: InputStream,
     private val waiter: () -> Int
-) {
+) : java.io.Closeable {
     fun getInputStream(): InputStream = inS
     fun getOutputStream(): OutputStream = outS
     fun getErrorStream(): InputStream = errS
     fun waitFor(): Int = waiter()
+
+    override fun close() {
+        runCatching { inS.close() }
+        runCatching { outS.close() }
+        runCatching { errS.close() }
+    }
 }
 
 object PrivService {

@@ -43,6 +43,7 @@ object HistoryStore {
     }
 
     fun start(context: Context, manager: String, exploit: String, kernel: String, model: String): File {
+        pruneOldLogs(context, 100)
         val f = File(dir(context), "${fileFmt.format(Date())}.log")
         synchronized(lock) {
             writeDurable(
@@ -54,6 +55,15 @@ object HistoryStore {
             current = f
         }
         return f
+    }
+
+    private fun pruneOldLogs(context: Context, maxLogs: Int) {
+        runCatching {
+            val files = dir(context).listFiles { f -> f.isFile && f.name.endsWith(".log") } ?: return
+            if (files.size >= maxLogs) {
+                files.sortedBy { it.name }.take(files.size - maxLogs + 1).forEach { it.delete() }
+            }
+        }
     }
 
     fun append(line: String) {
@@ -80,11 +90,15 @@ object HistoryStore {
         return files.sortedByDescending { it.name }.mapNotNull { parse(it) }
     }
 
-    fun read(context: Context, fileName: String): String =
-        runCatching { File(dir(context), fileName).readText() }.getOrDefault("")
+    fun read(context: Context, fileName: String): String {
+        val safeName = File(fileName).name
+        return runCatching { File(dir(context), safeName).readText() }.getOrDefault("")
+    }
 
-    fun delete(context: Context, fileName: String): Boolean =
-        File(dir(context), fileName).delete()
+    fun delete(context: Context, fileName: String): Boolean {
+        val safeName = File(fileName).name
+        return File(dir(context), safeName).delete()
+    }
 
     private fun parse(f: File): HistoryEntry? {
         val text = runCatching { f.readText() }.getOrNull() ?: return null

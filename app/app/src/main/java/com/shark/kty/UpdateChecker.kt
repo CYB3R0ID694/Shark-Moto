@@ -78,10 +78,14 @@ object UpdateChecker {
             setRequestProperty("User-Agent", USER_AGENT)
             setRequestProperty("Accept", "application/vnd.github+json")
         }
-        val body = conn.inputStream.bufferedReader().use { it.readText() }
-        val array = JSONArray(body)
-        if (array.length() == 0) return null
-        return parseReleaseJson(array.getJSONObject(0), "GitHub (Beta)", allowPrerelease = true)
+        return try {
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val array = JSONArray(body)
+            if (array.length() == 0) null
+            else parseReleaseJson(array.getJSONObject(0), "GitHub (Beta)", allowPrerelease = true)
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun fetch(api: String, source: String, gitee: Boolean): UpdateInfo? {
@@ -91,9 +95,13 @@ object UpdateChecker {
             setRequestProperty("User-Agent", USER_AGENT)
             if (!gitee) setRequestProperty("Accept", "application/vnd.github+json")
         }
-        val body = conn.inputStream.bufferedReader().use { it.readText() }
-        val json = JSONObject(body)
-        return parseReleaseJson(json, source, allowPrerelease = false)
+        return try {
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(body)
+            parseReleaseJson(json, source, allowPrerelease = false)
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun parseReleaseJson(json: JSONObject, source: String, allowPrerelease: Boolean): UpdateInfo? {
@@ -148,7 +156,11 @@ object UpdateChecker {
             readTimeout = 10000
             setRequestProperty("User-Agent", USER_AGENT)
         }
-        return conn.inputStream.bufferedReader().use { it.readText() }
+        return try {
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            conn.disconnect()
+        }
     }
 
     suspend fun download(
@@ -169,38 +181,42 @@ object UpdateChecker {
             readTimeout = 30000
             setRequestProperty("User-Agent", USER_AGENT)
         }
-        val total = conn.contentLengthLong.takeIf { it > 0 } ?: info.apk.size
-        val digest = MessageDigest.getInstance("SHA-256")
-        var lastPercent = -1
-        conn.inputStream.use { input ->
-            target.outputStream().use { output ->
-                val buffer = ByteArray(64 * 1024)
-                var read: Int
-                var done = 0L
-                while (true) {
-                    read = input.read(buffer)
-                    if (read <= 0) break
-                    output.write(buffer, 0, read)
-                    digest.update(buffer, 0, read)
-                    done += read
-                    if (total > 0) {
-                        val progress = (done.toFloat() / total).coerceIn(0f, 1f)
-                        val percent = (progress * 100).toInt()
-                        if (percent != lastPercent) {
-                            lastPercent = percent
-                            onProgress(progress)
+        try {
+            val total = conn.contentLengthLong.takeIf { it > 0 } ?: info.apk.size
+            val digest = MessageDigest.getInstance("SHA-256")
+            var lastPercent = -1
+            conn.inputStream.use { input ->
+                target.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var read: Int
+                    var done = 0L
+                    while (true) {
+                        read = input.read(buffer)
+                        if (read <= 0) break
+                        output.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
+                        done += read
+                        if (total > 0) {
+                            val progress = (done.toFloat() / total).coerceIn(0f, 1f)
+                            val percent = (progress * 100).toInt()
+                            if (percent != lastPercent) {
+                                lastPercent = percent
+                                onProgress(progress)
+                            }
                         }
                     }
                 }
             }
+            val actual = digest.digest().joinToString("") { "%02x".format(it) }
+            val expected = info.sha256
+            if (!expected.isNullOrBlank() && !actual.equals(expected, ignoreCase = true)) {
+                target.delete()
+                throw IllegalStateException("SHA-256 verification failed")
+            }
+            target
+        } finally {
+            conn.disconnect()
         }
-        val actual = digest.digest().joinToString("") { "%02x".format(it) }
-        val expected = info.sha256
-        if (!expected.isNullOrBlank() && !actual.equals(expected, ignoreCase = true)) {
-            target.delete()
-            throw IllegalStateException("SHA-256 verification failed")
-        }
-        target
     }
 
     fun verifySignature(context: Context, apk: File): Boolean {

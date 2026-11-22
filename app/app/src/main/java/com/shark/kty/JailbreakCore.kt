@@ -301,16 +301,20 @@ object JailbreakCore {
         onLine: (String) -> Unit
     ): Int {
         val p = PrivService.newProcess(cmd, env, dir)
-        val out = Thread {
-            runCatching { p.getInputStream().bufferedReader().forEachLine(onLine) }
-        }.apply { isDaemon = true; start() }
-        val err = Thread {
-            runCatching { p.getErrorStream().bufferedReader().forEachLine(onLine) }
-        }.apply { isDaemon = true; start() }
-        val rc = p.waitFor()
-        out.join(2000)
-        err.join(2000)
-        return rc
+        return try {
+            val out = Thread {
+                runCatching { p.getInputStream().bufferedReader().forEachLine(onLine) }
+            }.apply { isDaemon = true; start() }
+            val err = Thread {
+                runCatching { p.getErrorStream().bufferedReader().forEachLine(onLine) }
+            }.apply { isDaemon = true; start() }
+            val rc = p.waitFor()
+            out.join(2000)
+            err.join(2000)
+            rc
+        } finally {
+            p.close()
+        }
     }
 
     fun readDeviceState(): Pair<Boolean, String> {
@@ -323,9 +327,13 @@ object JailbreakCore {
             ),
             arrayOf("PATH=/system/bin:/system/xbin:/data/adb/ksu/bin", "HOME=/"), "/"
         )
-        val lines = p.getInputStream().bufferedReader().readLines()
-        p.waitFor()
-        val active = lines.getOrNull(0)?.trim() == "YES"
-        return active to (lines.getOrNull(1)?.trim().orEmpty())
+        return try {
+            val lines = p.getInputStream().bufferedReader().readLines()
+            p.waitFor()
+            val active = lines.getOrNull(0)?.trim() == "YES"
+            active to (lines.getOrNull(1)?.trim().orEmpty())
+        } finally {
+            p.close()
+        }
     }
 }

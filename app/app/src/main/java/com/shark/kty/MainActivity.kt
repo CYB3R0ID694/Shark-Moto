@@ -2513,10 +2513,15 @@ class MainActivity : ComponentActivity() {
             val res = runRootCommand(cmd, 5)
             if (res.first != 0) {
                 val fallback = runCatching {
-                    PrivService.newProcess(
+                    val p = PrivService.newProcess(
                         arrayOf("su", "-c", cmd),
                         shizukuEnv(), "/"
-                    ).waitFor()
+                    )
+                    try {
+                        p.waitFor()
+                    } finally {
+                        p.close()
+                    }
                 }.getOrDefault(-1)
                 if (fallback != 0) {
                     withContext(Dispatchers.Main) {
@@ -2712,10 +2717,22 @@ class MainActivity : ComponentActivity() {
 
             val result = runCatching {
                 val p = PrivService.newProcess(arrayOf("sh", "-c", script), shizukuEnv(), "/")
-                val out = p.getInputStream().bufferedReader().readText().trim()
-                val err = p.getErrorStream().bufferedReader().readText().trim()
-                p.waitFor()
-                if (err.isNotEmpty()) "$out\n[STDERR]\n$err" else out
+                try {
+                    var out = ""
+                    var err = ""
+                    val outThread = Thread {
+                        out = runCatching { p.getInputStream().bufferedReader().readText().trim() }.getOrDefault("")
+                    }.apply { start() }
+                    val errThread = Thread {
+                        err = runCatching { p.getErrorStream().bufferedReader().readText().trim() }.getOrDefault("")
+                    }.apply { start() }
+                    p.waitFor()
+                    outThread.join(2000)
+                    errThread.join(2000)
+                    if (err.isNotEmpty()) "$out\n[STDERR]\n$err" else out
+                } finally {
+                    p.close()
+                }
             }.getOrElse { "Failed to run Shizuku diagnostic: ${it.message}" }
 
             withContext(Dispatchers.Main) {
@@ -4004,12 +4021,16 @@ class MainActivity : ComponentActivity() {
             arrayOf("sh", "-c", "if grep -q '^kernelsu .* Live ' /proc/modules; then echo YES; elif timeout 3 su -c id 2>/dev/null | grep -q uid=0; then echo YES; else echo NO; fi; getenforce"),
             shizukuEnv(), "/"
         )
-        val lines = p.getInputStream()
-            .bufferedReader().readLines()
-        p.waitFor()
-        val active = lines.getOrNull(0)?.trim() == "YES"
-        val se = mapSelinux(lines.getOrNull(1)?.trim().orEmpty())
-        return active to se
+        return try {
+            val lines = p.getInputStream()
+                .bufferedReader().readLines()
+            p.waitFor()
+            val active = lines.getOrNull(0)?.trim() == "YES"
+            val se = mapSelinux(lines.getOrNull(1)?.trim().orEmpty())
+            active to se
+        } finally {
+            p.close()
+        }
     }
 
     private fun updateAntiRootGuard(value: Boolean) {
@@ -4144,20 +4165,29 @@ class MainActivity : ComponentActivity() {
         var directFailure: Pair<Int, String>? = null
         runCatching {
             val p = ProcessBuilder("/system/bin/su", "-c", script).redirectErrorStream(true).start()
+            var outText = ""
+            val readerThread = Thread {
+                outText = runCatching { p.inputStream.bufferedReader().readText().trim() }.getOrDefault("")
+            }.apply { start() }
             if (p.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-                val out = p.inputStream.bufferedReader().readText().trim()
-                val result = p.exitValue() to out
+                readerThread.join(1000)
+                val result = p.exitValue() to outText
                 if (result.first == 0) return result
                 directFailure = result
             } else {
                 p.destroyForcibly()
+                readerThread.interrupt()
                 directFailure = -2 to "su timeout"
             }
         }
         val fallback = runCatching {
             val p = PrivService.newProcess(arrayOf("su", "-c", script), shizukuEnv(), "/")
-            val out = p.getInputStream().bufferedReader().readText().trim()
-            p.waitFor() to out
+            try {
+                val out = p.getInputStream().bufferedReader().readText().trim()
+                p.waitFor() to out
+            } finally {
+                p.close()
+            }
         }.getOrElse { -1 to (it.message ?: "root command failed") }
         return if (fallback.first == 0) fallback else (directFailure ?: fallback)
     }
@@ -4167,6 +4197,13 @@ class MainActivity : ComponentActivity() {
         hotSwitchBusy = true
         lifecycleScope.launch(Dispatchers.IO) {
             val pkg = resolveInstalledManagerPkg(kind)
+            if (!pkg.matches(Regex("^[a-zA-Z0-9._]+$"))) {
+                withContext(Dispatchers.Main) {
+                    hotSwitchBusy = false
+                    addLog("Hot switch failed: invalid package name $pkg")
+                }
+                return@launch
+            }
             val appInfo = runCatching {
                 packageManager.getPackageInfo(pkg, 0).applicationInfo
             }.getOrNull()
@@ -4295,11 +4332,20 @@ class MainActivity : ComponentActivity() {
                 }
                 val (alreadyActive, _) = readDeviceState()
                 val targetPkg = resolveInstalledManagerPkg(manager)
-                val ksudPreflight = PrivService.newProcess(
+                if (!targetPkg.matches(Regex("^[a-zA-Z0-9._]+$"))) {
+                    addLog("Invalid manager package name: $targetPkg")
+                    return@launch
+                }
+                val p = PrivService.newProcess(
                     arrayOf("sh", "-c",
                         "[ -n \"$(pm path '$targetPkg' 2>/dev/null)\" ] || [ -n \"$(pm path '${manager.pkg}' 2>/dev/null)\" ] || [ -x /data/adb/ksu/bin/ksud ] || [ -x /data/adb/ksud ]"),
                     shizukuEnv(), "/"
-                ).waitFor()
+                )
+                val ksudPreflight = try {
+                    p.waitFor()
+                } finally {
+                    p.close()
+                }
                 if (ksudPreflight != 0) {
                     addLog("Manager not installed: $targetPkg. Install the manager APK first; ksud is executed from its APK, no bundled copy.")
                     withContext(Dispatchers.Main) {
@@ -4375,10 +4421,15 @@ class MainActivity : ComponentActivity() {
                             addLog("Jailbreak complete; restarting zygote")
                         }
                         val rebootRc = runCatching {
-                            PrivService.newProcess(
+                            val p = PrivService.newProcess(
                                 arrayOf("su", "-c", "setprop ctl.restart zygote"),
                                 shizukuEnv(), "/"
-                            ).waitFor()
+                            )
+                            try {
+                                p.waitFor()
+                            } finally {
+                                p.close()
+                            }
                         }.getOrDefault(-1)
                         if (rebootRc != 0) addLog("Soft reboot failed rc=$rebootRc")
                     }
@@ -4476,6 +4527,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun isPackageInstalled(pkg: String): Boolean {
+        if (!pkg.matches(Regex("^[a-zA-Z0-9._]+$"))) return false
         if (runCatching { packageManager.getPackageInfo(pkg, 0) }.isSuccess) return true
         return runCatching {
             val (rc, out) = runRootCommand("pm path '$pkg' 2>/dev/null", 5)

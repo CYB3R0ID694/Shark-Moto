@@ -122,23 +122,36 @@ class AutoJailbreakService : Service() {
             } else {
                 val detected = JailbreakCore.findSpoofedNextPackage(this) { cmd ->
                     val p = PrivService.newProcess(arrayOf("sh", "-c", cmd), arrayOf("PATH=/system/bin:/system/xbin"), "/")
-                    val out = p.getInputStream().bufferedReader().use { it.readText() }
-                    p.waitFor() to out
+                    try {
+                        val out = p.getInputStream().bufferedReader().use { it.readText() }
+                        p.waitFor() to out
+                    } finally {
+                        p.close()
+                    }
                 }
                 if (!detected.isNullOrEmpty()) {
                     managerPkg = detected
                 }
             }
         }
+        if (!managerPkg.matches(Regex("^[a-zA-Z0-9._]+$"))) {
+            finishNotify("Invalid manager package name: $managerPkg")
+            return
+        }
         val preflight = runCatching {
-            PrivService.newProcess(
+            val p = PrivService.newProcess(
                 arrayOf(
                     "sh", "-c",
                     "[ -n \"\$(pm path '$managerPkg' 2>/dev/null)\" ] || " +
                         "[ -x /data/adb/ksu/bin/ksud ] || [ -x /data/adb/ksud ]"
                 ),
                 arrayOf("PATH=/system/bin:/system/xbin:/data/adb/ksu/bin", "HOME=/"), "/"
-            ).waitFor()
+            )
+            try {
+                p.waitFor()
+            } finally {
+                p.close()
+            }
         }.getOrDefault(-1)
         if (preflight != 0) {
             finishNotify(AppStrings.autoJailbreakManagerNotInstalled(managerPkg, lang))
