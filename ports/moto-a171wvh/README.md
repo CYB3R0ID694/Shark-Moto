@@ -84,7 +84,7 @@ BTF & `IKCFG` checks (identical for both r26 and r59):
    - Added configurable `SITE_MASK` macro.
    - Added `ensure_trace_buffer_size()`: Motorola defaults `/sys/kernel/tracing/buffer_size_kb` to `7` KB; expands values `< 2048` KB to `4096` KB.
 3. `exploit/rust-kplant/src/main.rs`: Added `is_motorola_device()` to skip OPPO/ColorOS-only steps.
-4. `app/app/src/main/java/com/shark/kty/MainActivity.kt`:
+4. `app/app/src/main/java/com/shark/neo/MainActivity.kt`:
    - Registered both Motorola kernel versions in `PROFILE_BY_RELEASE` → `ExploitKind.CVE61258`.
    - Added `isMotorolaDevice()` guards.
 

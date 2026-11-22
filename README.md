@@ -115,7 +115,7 @@ Shark consists of the Android app, on-device exploit runners, and optional kerne
 ```text
 Shark/
 ├── app/                         Android App (Gradle project)
-│   ├── app/src/main/java/com/shark/kty/
+│   ├── app/src/main/java/com/shark/neo/
 │   │   ├── MainActivity.kt      Four tabs, exploit flow, manager & extras state
 │   │   ├── UpdateChecker.kt     Gitee / GitHub release updater
 │   │   ├── HistoryStore.kt      Log persistence and run history
