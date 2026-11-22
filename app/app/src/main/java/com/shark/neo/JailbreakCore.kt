@@ -249,6 +249,22 @@ object JailbreakCore {
     )
 
     fun buildEnv(context: Context, cfg: EnvConfig, dir: String): Array<String> {
+        if (cfg.kind == "CVE61") {
+            runCatching {
+                val targetFile = java.io.File(context.filesDir, "android14-6.1_kernelsu.ko")
+                if (!targetFile.exists() || targetFile.length() == 0L) {
+                    context.assets.open("android14-6.1_kernelsu.ko").use { input ->
+                        targetFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                }
+                val koBin = java.io.File(context.filesDir, "ko.bin")
+                if (!koBin.exists() || koBin.length() == 0L) {
+                    context.assets.open("android14-6.1_kernelsu.ko").use { input ->
+                        koBin.outputStream().use { output -> input.copyTo(output) }
+                    }
+                }
+            }
+        }
         val runtime = managerRuntime(cfg.managerKind)
         val managerPkg = cfg.customManagerPkg?.takeIf { it.isNotBlank() } ?: runtime.second
         val gate = isGateKernel(cfg.kind, cfg.release)
