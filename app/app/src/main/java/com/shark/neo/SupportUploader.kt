@@ -34,11 +34,34 @@ object SupportUploader {
             }
 
             val deviceName = JailbreakCore.resolveDeviceName()
+            var displayDevice = "${Build.MANUFACTURER} ${Build.MODEL} ($deviceName)"
+            var displayKernel = kernelVersion
+            var displayFingerprint: String? = Build.FINGERPRINT
+
+            if (!customProfileJson.isNullOrBlank()) {
+                runCatching {
+                    val obj = JSONObject(customProfileJson)
+                    val pModel = obj.optString("model")
+                    val pRel = obj.optString("release")
+                    if (pModel.isNotBlank()) {
+                        displayDevice = pModel
+                    }
+                    if (pRel.isNotBlank()) {
+                        displayKernel = pRel
+                    }
+                    displayFingerprint = null // Don't show host device fingerprint for an imported profile
+                }
+            }
+
             val textBuilder = StringBuilder().apply {
                 append("🦈 <b>Shark Neo - Device Support Request</b>\n\n")
-                append("📱 <b>Device:</b> <code>${Build.MANUFACTURER} ${Build.MODEL} ($deviceName)</code>\n")
-                append("🐧 <b>Kernel:</b> <code>$kernelVersion</code>\n")
-                append("🏷️ <b>Fingerprint:</b> <code>${Build.FINGERPRINT}</code>\n\n")
+                append("📱 <b>Device:</b> <code>$displayDevice</code>\n")
+                append("🐧 <b>Kernel:</b> <code>$displayKernel</code>\n")
+                if (!displayFingerprint.isNullOrBlank()) {
+                    append("🏷️ <b>Fingerprint:</b> <code>$displayFingerprint</code>\n\n")
+                } else {
+                    append("\n")
+                }
                 if (!customProfileJson.isNullOrBlank()) {
                     append("📋 <b>Extracted Profile JSON:</b>\n<pre><code class=\"language-json\">$customProfileJson</code></pre>\n")
                 } else if (diagnosticReport.isNotBlank()) {

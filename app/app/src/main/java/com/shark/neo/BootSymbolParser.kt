@@ -114,9 +114,11 @@ object BootSymbolParser {
         // Determine baseline architecture & engine
         val (engine, timerSite, timerLow21, copyLow21, siteMask) = deriveEngineAndSites(banner, decompressed, syms)
 
+        val detectedModel = detectDeviceName(data, decompressed, filename)
+
         val profile = DynamicKernelProfile(
             release = banner,
-            model = "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL} (Imported)",
+            model = "$detectedModel (Imported)",
             engine = engine,
             timerSite = "0x%x".format(timerSite),
             timerLow21 = "0x%x".format(timerLow21),
@@ -872,5 +874,114 @@ object BootSymbolParser {
             res = res or ((bytes[offset + i].toLong() and 0xFF) shl (i * 8))
         }
         return res
+    }
+
+    fun detectDeviceName(data: ByteArray, decompressed: ByteArray, filename: String): String {
+        // 1. Try DTB in boot.img or kernel
+        val dtbModel = scanDeviceModelFromDtb(data) ?: scanDeviceModelFromDtb(decompressed)
+        if (!dtbModel.isNullOrBlank()) {
+            return dtbModel
+        }
+
+        // 2. Check if filename contains a device name (e.g. RMX3867_boot.img, realme_boot.img)
+        val cleanName = filename.substringBeforeLast(".")
+        val parts = cleanName.split("_", "-", " ").filter {
+            it.isNotBlank() && !it.equals("boot", ignoreCase = true) &&
+                    !it.equals("image", ignoreCase = true) && !it.equals("kernel", ignoreCase = true)
+        }
+        if (parts.isNotEmpty()) {
+            return parts.joinToString(" ")
+        }
+
+        // 3. Fallback to host device info
+        return "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}"
+    }
+
+    private fun scanDeviceModelFromDtb(data: ByteArray): String? {
+        val dtbMagic = byteArrayOf(0xd0.toByte(), 0x0d.toByte(), 0xfe.toByte(), 0xed.toByte())
+        var searchFrom = 0
+        while (searchFrom < data.size - 32) {
+            val idx = indexOfBytes(data, dtbMagic, searchFrom)
+            if (idx == -1) break
+
+            val m = parseDtbModel(data, idx)
+            if (!m.isNullOrBlank()) {
+                return m
+            }
+            searchFrom = idx + 4
+        }
+        return null
+    }
+
+    private fun parseDtbModel(data: ByteArray, offset: Int): String? {
+        if (offset + 32 > data.size) return null
+        val magic = readU32BE(data, offset)
+        if (magic != 0xd00dfeedL) return null
+
+        val structOff = offset + readU32BE(data, offset + 8).toInt()
+        val stringsOff = offset + readU32BE(data, offset + 12).toInt()
+        if (structOff >= data.size || stringsOff >= data.size || structOff < offset || stringsOff < offset) return null
+
+        var p = structOff
+        if (p + 4 > data.size || readU32BE(data, p) != 1L) return null
+        p += 4
+
+        while (p < data.size && data[p] != 0.toByte()) {
+            p++
+        }
+        p++
+        p = (p + 3) and -4
+
+        var modelVal: String? = null
+        var compatVal: String? = null
+
+        while (p + 8 <= data.size) {
+            val tag = readU32BE(data, p)
+            if (tag == 3L) {
+                val propLen = readU32BE(data, p + 4).toInt()
+                val nameOff = readU32BE(data, p + 8).toInt()
+                p += 12
+
+                if (propLen in 1..256 && p + propLen <= data.size && stringsOff + nameOff < data.size) {
+                    val propName = readNullTerminatedString(data, stringsOff + nameOff)
+                    if (propName == "model") {
+                        val s = readNullTerminatedString(data, p, propLen)
+                        if (s.isNotBlank() && !s.contains("generic", ignoreCase = true)) {
+                            modelVal = s
+                        }
+                    } else if (propName == "compatible") {
+                        val s = readNullTerminatedString(data, p, propLen)
+                        if (s.isNotBlank() && !s.contains("generic", ignoreCase = true)) {
+                            compatVal = s.replace(",", " ").trim()
+                        }
+                    }
+                }
+                p += (propLen + 3) and -4
+            } else if (tag == 4L) {
+                p += 4
+            } else {
+                break
+            }
+        }
+
+        return modelVal ?: compatVal
+    }
+
+    private fun readU32BE(bytes: ByteArray, offset: Int): Long {
+        if (offset + 4 > bytes.size || offset < 0) return 0L
+        return ((bytes[offset].toLong() and 0xFF) shl 24) or
+                ((bytes[offset + 1].toLong() and 0xFF) shl 16) or
+                ((bytes[offset + 2].toLong() and 0xFF) shl 8) or
+                (bytes[offset + 3].toLong() and 0xFF)
+    }
+
+    private fun readNullTerminatedString(bytes: ByteArray, offset: Int, maxLen: Int = 128): String {
+        if (offset >= bytes.size || offset < 0) return ""
+        var end = offset
+        val limit = minOf(bytes.size, offset + maxLen)
+        while (end < limit && bytes[end] != 0.toByte()) {
+            end++
+        }
+        return String(bytes, offset, end - offset, Charsets.UTF_8).trim()
     }
 }

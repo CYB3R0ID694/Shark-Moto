@@ -34,18 +34,18 @@
     },
     {
       "release": "6.6.118-android15-8-o-ga8027a191504-4k",
-      "model": "Realme 12 Pro+ / RMX3867 (RE5C86L1)",
+      "model": "realme RMX3867 (RE5C86L1)",
       "engine": "CVE66118",
-      "timer_site": "0xffffffc0801a4dfc",
-      "timer_low21": "0x1a4dfc",
+      "timer_site": "0xffffffc0801a3a94",
+      "timer_low21": "0x1a3a94",
       "copy_low21": "0x0ab944",
-      "selinux_state": "0xffffffc08239c620",
-      "panic_on_warn": "0xffffffc08214b2cc",
-      "root_user": "0xffffffc08216f6e0",
-      "init_user_ns": "0xffffffc08216f450",
-      "init_ucounts": "0xffffffc0821711b0",
-      "init_groups": "0xffffffc082170c40",
-      "site_mask": "0xffff"
+      "selinux_state": "0xffffffc08240d548",
+      "panic_on_warn": "0xffffffc0821bb2cc",
+      "root_user": "0xffffffc0821df7e0",
+      "init_user_ns": "0xffffffc0821df550",
+      "init_ucounts": "0xffffffc0821e12b0",
+      "init_groups": "0xffffffc0821e0d40",
+      "site_mask": "0x1fffff"
     }
   ]
 }

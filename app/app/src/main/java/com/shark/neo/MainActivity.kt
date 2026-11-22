@@ -310,6 +310,7 @@ class MainActivity : ComponentActivity() {
     private var dynamicProfileCount by mutableStateOf(0)
     private var parsingBoot by mutableStateOf(false)
     private var parseResultDialog by mutableStateOf<ParseResult?>(null)
+    private var parsedDeviceModel by mutableStateOf("")
     private var softRebootDialogVisible by mutableStateOf(false)
     private var softRebooting by mutableStateOf(false)
     private var rerunBlockedDialogVisible by mutableStateOf(false)
@@ -914,7 +915,17 @@ class MainActivity : ComponentActivity() {
             title = if (isSuccess) "Kernel Symbol Parser" else "Parser Error",
             confirmAction = CouiDialogAction(
                 text = AppStrings.close(appLanguage),
-                onClick = { parseResultDialog = null },
+                onClick = {
+                    if (isSuccess) {
+                        val p = (result as ParseResult.Success).profile
+                        val finalModel = parsedDeviceModel.trim().ifEmpty { p.model }
+                        if (finalModel != p.model) {
+                            val finalProfile = p.copy(model = finalModel)
+                            DynamicProfileManager.addProfile(applicationContext, finalProfile)
+                        }
+                    }
+                    parseResultDialog = null
+                },
                 style = CouiDialogActionStyle.Primary,
                 colors = CouiDialogDefaults.primaryActionColors(accent)
             ),
@@ -922,7 +933,10 @@ class MainActivity : ComponentActivity() {
                 text = AppStrings.submitProfileToGroup(appLanguage),
                 onClick = {
                     val p = (result as ParseResult.Success).profile
-                    uploadDiagnosticReport(p.toJsonString())
+                    val finalModel = parsedDeviceModel.trim().ifEmpty { p.model }
+                    val finalProfile = p.copy(model = finalModel)
+                    DynamicProfileManager.addProfile(applicationContext, finalProfile)
+                    uploadDiagnosticReport(finalProfile.toJsonString())
                 }
             ) else null,
             visible = true
@@ -939,7 +953,35 @@ class MainActivity : ComponentActivity() {
                             kind = CouiTextKind.SectionTitle,
                             color = scheme.onSurface
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = if (appLanguage == AppLanguage.ZH) "设备型号 / 名称：" else "Device Model / Name:",
+                            kind = CouiTextKind.Category,
+                            color = scheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        BasicTextField(
+                            value = parsedDeviceModel,
+                            onValueChange = { parsedDeviceModel = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(scheme.card, RoundedCornerShape(8.dp))
+                                .border(1.dp, scheme.onSurface.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            textStyle = TextStyle(color = scheme.onSurface, fontSize = 14.sp),
+                            singleLine = true,
+                            decorationBox = { inner ->
+                                if (parsedDeviceModel.isEmpty()) {
+                                    Text(
+                                        text = "e.g. realme RMX3867 (RE5C86L1)",
+                                        kind = CouiTextKind.Description,
+                                        color = scheme.onSurface.copy(alpha = 0.4f)
+                                    )
+                                }
+                                inner()
+                            }
+                        )
+                        Spacer(Modifier.height(10.dp))
                         Text(
                             text = result.details,
                             kind = CouiTextKind.Description,
@@ -2525,9 +2567,12 @@ class MainActivity : ComponentActivity() {
             parsingBoot = false
             when (res) {
                 is ParseResult.Success -> {
+                    parsedDeviceModel = res.profile.model.removeSuffix(" (Imported)").trim()
                     DynamicProfileManager.addProfile(applicationContext, res.profile)
                     dynamicProfileCount = DynamicProfileManager.profileCount()
-                    val newKind = JailbreakCore.kindFor(kernelVersion)?.let {
+                    val newKind = JailbreakCore.kindFor(res.profile.release)?.let {
+                        runCatching { ExploitKind.valueOf(it) }.getOrNull()
+                    } ?: JailbreakCore.kindFor(kernelVersion)?.let {
                         runCatching { ExploitKind.valueOf(it) }.getOrNull()
                     } ?: ExploitKind.UNSUPPORTED
                     exploit = newKind
@@ -2681,11 +2726,33 @@ class MainActivity : ComponentActivity() {
         if (uploadingReport) return
         uploadingReport = true
         lifecycleScope.launch {
+            var targetDevice = "${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})"
+            var targetBrand = Build.BRAND
+            var targetKernel = kernelVersion
+            var targetFingerprint = Build.FINGERPRINT
+
+            if (!customProfileJson.isNullOrBlank()) {
+                runCatching {
+                    val obj = org.json.JSONObject(customProfileJson)
+                    val pModel = obj.optString("model")
+                    val pRelease = obj.optString("release")
+                    if (pModel.isNotBlank()) {
+                        targetDevice = pModel
+                        val firstWord = pModel.split(" ", "_", "-").firstOrNull().orEmpty()
+                        if (firstWord.isNotBlank()) targetBrand = firstWord
+                    }
+                    if (pRelease.isNotBlank()) {
+                        targetKernel = pRelease
+                    }
+                    targetFingerprint = "Imported from boot.img ($pRelease)"
+                }
+            }
+
             val fullReport = """
-                Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})
-                Brand: ${Build.BRAND}
-                Fingerprint: ${Build.FINGERPRINT}
-                Kernel: $kernelVersion
+                Device: $targetDevice
+                Brand: $targetBrand
+                Fingerprint: $targetFingerprint
+                Kernel: $targetKernel
                 Engine: ${exploit.fullLabel}
                 SELinux: $selinuxText
                 Backend: ${PrivService.pick()?.label ?: "None"} (authorized=$authorized)
@@ -2693,7 +2760,7 @@ class MainActivity : ComponentActivity() {
             """.trimIndent()
             addLog("[support-upload] Uploading device support request to Telegram group...")
             val result = SupportUploader.uploadReport(
-                kernelVersion = kernelVersion,
+                kernelVersion = targetKernel,
                 diagnosticReport = fullReport,
                 customProfileJson = customProfileJson
             )
