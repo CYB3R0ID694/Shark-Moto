@@ -45,7 +45,8 @@ object JailbreakCore {
         "6.6.118-android15-8-o-ga8027a191504-4k" to "CVE66118",
         "6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k" to "CVE66127",
         "6.12.58-android16-6-g690108013dcc-abogki576129896-4k" to "CVE61258",
-        "6.6.89-android15-8-gdcee9aa4fcbc-ab14676413-4k" to "CVE6689"
+        "6.6.89-android15-8-gdcee9aa4fcbc-ab14676413-4k" to "CVE6689",
+        "6.1.128-android14-11-o-g9f6b860b6402" to "CVE61"
     )
 
     /* Devices whose support is only shipped in the full (vivo) build. */
@@ -89,12 +90,14 @@ object JailbreakCore {
         "CVE66118" -> "$nativeDir/libk66118.so"
         "CVE66127" -> "$nativeDir/libk66127.so"
         "CVE6689" -> "$nativeDir/libk6689.so"
+        "CVE61" -> "$nativeDir/libk61.so"
         else -> null
     }
 
     fun kmiFor(kind: String, release: String): String = when (kind) {
         "CVE6689", "CVE66118", "CVE66127" -> "android15-6.6"
         "CVE61821" -> "android17-6.18"
+        "CVE61" -> "android14-6.1"
         else -> "android16-6.12"
     }
 

@@ -2841,6 +2841,9 @@ class MainActivity : ComponentActivity() {
                 elif [ -x "$nativeDir/libk61821x.so" ] && echo "$kernelVersion" | grep -q "6.18.21"; then
                     echo "Executing libk61821x.so probe:"
                     "$nativeDir/libk61821x.so" probe 2>&1
+                elif [ -x "$nativeDir/libk61.so" ] && echo "$kernelVersion" | grep -q "6.1\."; then
+                    echo "Executing libk61.so probe:"
+                    "$nativeDir/libk61.so" probe 2>&1
                 elif echo "$kernelVersion" | grep -q "6.1\."; then
                     echo "=== LINUX 6.1 SERIES KERNEL DETECTED ==="
                     echo "Release: $kernelVersion"
@@ -4546,6 +4549,7 @@ class MainActivity : ComponentActivity() {
                     ExploitKind.CVE66118 -> arrayOf("$nativeDir/libk66118.so", "run")
                     ExploitKind.CVE66127 -> arrayOf("$nativeDir/libk66127.so", "run")
                     ExploitKind.CVE6689 -> arrayOf("$nativeDir/libk6689.so", "run")
+                    ExploitKind.CVE61 -> arrayOf("$nativeDir/libk61.so", "run")
                     ExploitKind.UNSUPPORTED -> null
                 } ?: run {
                     withContext(Dispatchers.Main) {
@@ -4659,6 +4663,7 @@ class MainActivity : ComponentActivity() {
         CVE66118("CVE-2026-98260-6.6.118"),
         CVE66127("CVE-2026-98260-vivo-6.6.127"),
         CVE6689("CVE-2026-98260-6.6.89"),
+        CVE61("CVE-2026-98260-6.1"),
         UNSUPPORTED("Unsupported Device")
     }
 
