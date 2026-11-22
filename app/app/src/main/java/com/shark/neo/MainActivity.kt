@@ -3092,12 +3092,13 @@ class MainActivity : ComponentActivity() {
             ),
             SupportedDeviceEntry(
                 brand = "Realme",
-                name = "Realme GT8 / GT8 Pro / GT7 Pro / Neo8",
+                name = "Realme GT8 / GT7 Pro / Neo8 / 12 Pro+ (RMX3867)",
                 kernels = listOf(
                     "6.12.69-android16-6-g242e1a07f878-ab15865446-4k",
                     "6.12.69-android16-6-g5fd39602326e-ab16372235-4k",
                     "6.12.38-android16-5-g844001fb8721-ab14552068-4k",
-                    "6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k"
+                    "6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k",
+                    "6.6.118-android15-8-o-ga8027a191504-4k"
                 )
             ),
             SupportedDeviceEntry(
