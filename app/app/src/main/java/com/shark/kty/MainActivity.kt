@@ -1077,7 +1077,7 @@ class MainActivity : ComponentActivity() {
                         AppTopBar(AppStrings.titleLicenses(appLanguage), onBack = { aboutPage = AboutPage.HOME })
                     else -> AppTopBar(
                         when (tab) {
-                            AppTab.HOME -> "Shark"
+                            AppTab.HOME -> "Shark Neo"
                             AppTab.DEVICES -> AppStrings.supportedDevicesTitle(appLanguage)
                             else -> tab.label(appLanguage)
                         }
@@ -3747,14 +3747,14 @@ class MainActivity : ComponentActivity() {
                         ) {
                             Image(
                                 painter = painterResource(R.mipmap.ic_launcher_foreground),
-                                contentDescription = "Shark",
+                                contentDescription = "Shark Neo",
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(6.dp)
                             )
                         }
                         Text(
-                            text = "Shark",
+                            text = "Shark Neo",
                             kind = CouiTextKind.SectionTitle,
                             color = colors.title
                         )

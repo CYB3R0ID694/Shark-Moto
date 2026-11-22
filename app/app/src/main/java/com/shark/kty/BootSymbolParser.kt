@@ -168,7 +168,16 @@ object BootSymbolParser {
     private fun decodeLz4Legacy(src: ByteArray): ByteArray? {
         var i = 4
         val n = src.size
-        val out = ByteArrayOutputStream(n * 2)
+        var outBuf = ByteArray(maxOf(n * 3, 64 * 1024 * 1024))
+        var outSize = 0
+
+        fun ensureCapacity(needed: Int) {
+            if (outSize + needed > outBuf.size) {
+                var newCap = outBuf.size * 2
+                while (outSize + needed > newCap) newCap *= 2
+                outBuf = outBuf.copyOf(newCap)
+            }
+        }
 
         while (i + 4 <= n) {
             val bsz = (src[i].toInt() and 0xff) or
@@ -195,7 +204,9 @@ object BootSymbolParser {
                     } while (s == 255)
                 }
                 if (p + ll > blkEnd) return null
-                out.write(blk, p, ll)
+                ensureCapacity(ll)
+                System.arraycopy(blk, p, outBuf, outSize, ll)
+                outSize += ll
                 p += ll
 
                 if (p >= blkEnd) break
@@ -215,16 +226,16 @@ object BootSymbolParser {
                     } while (s == 255)
                 }
 
-                val outBuf = out.toByteArray()
-                val copyStart = outBuf.size - offset
+                ensureCapacity(ml)
+                val copyStart = outSize - offset
                 if (copyStart < 0) return null
                 for (m in 0 until ml) {
-                    out.write(outBuf[copyStart + (m % offset)].toInt())
+                    outBuf[outSize++] = outBuf[copyStart + (m % offset)]
                 }
             }
             i += bsz
         }
-        return out.toByteArray()
+        return outBuf.copyOf(outSize)
     }
 
     fun scanKernelBanner(image: ByteArray): String? {

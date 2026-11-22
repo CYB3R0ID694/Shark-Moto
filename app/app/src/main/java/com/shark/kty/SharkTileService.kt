@@ -48,7 +48,7 @@ class SharkTileService : TileService() {
         val lang = AppLanguage.fromCode(prefs.getString("app_language", "en"))
         val (active, _) = runCatching { JailbreakCore.readDeviceState() }.getOrDefault(false to "")
 
-        tile.label = "Shark Root"
+        tile.label = "Shark Neo"
         if (active) {
             tile.state = Tile.STATE_ACTIVE
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

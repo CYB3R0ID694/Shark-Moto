@@ -31,7 +31,7 @@ object DynamicProfileManager {
         "https://raw.githubusercontent.com/CYB3R0ID694/Shark-Moto/beta/profiles.json"
     private const val FILE_NAME = "dynamic_profiles.json"
 
-    private val profiles = mutableMapOf<String, DynamicKernelProfile>()
+    private val profiles = java.util.concurrent.ConcurrentHashMap<String, DynamicKernelProfile>()
 
     fun init(context: Context) {
         runCatching {

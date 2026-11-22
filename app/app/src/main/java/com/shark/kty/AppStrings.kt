@@ -22,7 +22,7 @@ object AppStrings {
     }
 
     fun langGateSubtitle(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "请选择 Shark 应用显示语言\nPlease select your preferred language"
+        AppLanguage.ZH -> "请选择 Shark Neo 应用显示语言\nPlease select your preferred language"
         AppLanguage.RU -> "Пожалуйста, выберите язык приложения\nPlease select your preferred language"
         AppLanguage.PT -> "Por favor, selecione o idioma do aplicativo\nPlease select your preferred language"
         else -> "Please select your preferred language\nPor favor, selecione seu idioma preferido"
@@ -868,10 +868,10 @@ object AppStrings {
     }
 
     fun autoJailbreakPrivNotGranted(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "未授权 Stellar/Shizuku，请打开 Shark 授权"
-        AppLanguage.RU -> "Stellar/Shizuku не авторизован, откройте Shark"
-        AppLanguage.PT -> "Stellar/Shizuku não autorizado, abra o Shark"
-        else -> "Stellar/Shizuku not authorized, open Shark to grant"
+        AppLanguage.ZH -> "未授权 Stellar/Shizuku，请打开 Shark Neo 授权"
+        AppLanguage.RU -> "Stellar/Shizuku не авторизован, откройте Shark Neo"
+        AppLanguage.PT -> "Stellar/Shizuku não autorizado, abra o Shark Neo"
+        else -> "Stellar/Shizuku not authorized, open Shark Neo to grant"
     }
 
     fun autoJailbreakKernelUnsupported(release: String, lang: AppLanguage): String = when (lang) {
@@ -910,10 +910,10 @@ object AppStrings {
     }
 
     fun autoJailbreakFailed(rc: Int, tail: String, lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "自动越狱失败 exit=$rc$tail，打开 Shark 查看日志"
-        AppLanguage.RU -> "Сбой авто-рута exit=$rc$tail, откройте Shark"
-        AppLanguage.PT -> "Falha no root automático exit=$rc$tail, abra o Shark"
-        else -> "Auto-jailbreak failed exit=$rc$tail, open Shark to view logs"
+        AppLanguage.ZH -> "自动越狱失败 exit=$rc$tail，打开 Shark Neo 查看日志"
+        AppLanguage.RU -> "Сбой авто-рута exit=$rc$tail, откройте Shark Neo"
+        AppLanguage.PT -> "Falha no root automático exit=$rc$tail, abra o Shark Neo"
+        else -> "Auto-jailbreak failed exit=$rc$tail, open Shark Neo to view logs"
     }
 
     fun autoJailbreakPanicDisabled(lang: AppLanguage): String = when (lang) {

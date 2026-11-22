@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -57,6 +58,11 @@ class AutoJailbreakService : Service() {
             }
         }
         return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 
     private suspend fun runAuto() {
@@ -219,7 +225,7 @@ class AutoJailbreakService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Shark 自动越狱")
+            .setContentTitle("Shark Neo 自动越狱")
             .setContentText(text)
             .setContentIntent(pending)
             .setOngoing(true)
@@ -245,7 +251,7 @@ class AutoJailbreakService : Service() {
         )
         val done = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Shark 自动越狱")
+            .setContentTitle("Shark Neo 自动越狱")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(pending)

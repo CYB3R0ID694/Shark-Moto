@@ -30,7 +30,7 @@ android {
     }
     buildToolsVersion = "37.0.0"
     defaultConfig {
-        applicationId = "com.shark.kty"
+        applicationId = "com.shark.neo"
         minSdk = 33
         targetSdk = 37
         versionCode = 105
