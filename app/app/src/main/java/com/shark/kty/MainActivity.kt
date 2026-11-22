@@ -314,6 +314,7 @@ class MainActivity : ComponentActivity() {
     private var softRebooting by mutableStateOf(false)
     private var rerunBlockedDialogVisible by mutableStateOf(false)
     private var bootSessionRan by mutableStateOf(false)
+    private var uploadingReport by mutableStateOf(false)
 
     private val bootPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -917,6 +918,13 @@ class MainActivity : ComponentActivity() {
                 style = CouiDialogActionStyle.Primary,
                 colors = CouiDialogDefaults.primaryActionColors(accent)
             ),
+            dismissAction = if (isSuccess) CouiDialogAction(
+                text = AppStrings.submitProfileToGroup(appLanguage),
+                onClick = {
+                    val p = (result as ParseResult.Success).profile
+                    uploadDiagnosticReport(p.toJsonString())
+                }
+            ) else null,
             visible = true
         ) {
             Column(
@@ -1935,6 +1943,38 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            Divider(startIndent = itemDividerIndent(), color = colors.divider)
+            Item(
+                onClick = { uploadDiagnosticReport() },
+                enabled = !uploadingReport,
+                trailing = { Chevron() }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AppIcon(
+                        icon = Icons.Filled.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = amberTint
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (uploadingReport) AppStrings.submittingReport(appLanguage) else AppStrings.submitDeviceForSupport(appLanguage),
+                            kind = CouiTextKind.SectionTitle,
+                            color = colors.title
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "https://t.me/sharkmotosupport (Direct Telegram support)",
+                            kind = CouiTextKind.PreferenceSummary,
+                            color = colors.summary
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -2637,6 +2677,37 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun uploadDiagnosticReport(customProfileJson: String? = null) {
+        if (uploadingReport) return
+        uploadingReport = true
+        lifecycleScope.launch {
+            val fullReport = """
+                Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})
+                Brand: ${Build.BRAND}
+                Fingerprint: ${Build.FINGERPRINT}
+                Kernel: $kernelVersion
+                Engine: ${exploit.fullLabel}
+                SELinux: $selinuxText
+                Backend: ${PrivService.pick()?.label ?: "None"} (authorized=$authorized)
+                ${if (diagnosticOutput.isNotBlank()) "Output:\n" + diagnosticOutput.take(1500) else ""}
+            """.trimIndent()
+            addLog("[support-upload] Uploading device support request to Telegram group...")
+            val result = SupportUploader.uploadReport(
+                kernelVersion = kernelVersion,
+                diagnosticReport = fullReport,
+                customProfileJson = customProfileJson
+            )
+            uploadingReport = false
+            result.onSuccess {
+                addLog("[support-upload] Success: Diagnostic posted to Telegram support group.")
+                Toast.makeText(this@MainActivity, AppStrings.submitReportSuccess(appLanguage), Toast.LENGTH_LONG).show()
+            }.onFailure {
+                addLog("[support-upload] Failed: ${it.message}")
+                Toast.makeText(this@MainActivity, AppStrings.submitReportFailed(it.message ?: "unknown", appLanguage), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     private fun runShizukuDiagnostic() {
         if (diagnosticRunning) return
         if (!binderReady || !authorized) {
@@ -2900,6 +2971,15 @@ class MainActivity : ComponentActivity() {
                             title = AppStrings.actionSubmitGithubIssue(appLanguage),
                             summary = "Generate and open pre-filled issue on CYB3R0ID694/Shark-Moto",
                             onClick = { submitGithubIssue() },
+                            trailing = { Chevron() }
+                        )
+                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        SettingItem(
+                            icon = Icons.Filled.Share,
+                            title = if (uploadingReport) AppStrings.submittingReport(appLanguage) else AppStrings.submitDeviceForSupport(appLanguage),
+                            summary = "Direct upload to Telegram support group (@sharkmotosupport)",
+                            onClick = { uploadDiagnosticReport() },
+                            enabled = !uploadingReport,
                             trailing = { Chevron() }
                         )
                         Divider(startIndent = itemDividerIndent(), color = colors.divider)

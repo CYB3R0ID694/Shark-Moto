@@ -5,6 +5,10 @@ val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) FileInputStream(keystorePropsFile).use { load(it) }
 }
+val rawTgToken = (keystoreProps["tgBotToken"] as? String) ?: ""
+val tgChatId = (keystoreProps["tgChatId"] as? String) ?: "-1004312274608"
+val xorKey = 0x5a
+val obfuscatedToken = rawTgToken.map { (it.code xor xorKey).toString() }.joinToString(",")
 
 /* vivo/iQOO support is build-time switchable: the sources and the kernel
  * table stay in the tree, but the shipped APK can drop those devices and
@@ -40,6 +44,8 @@ android {
         }
         buildConfigField("boolean", "VIVO_IQOO_SUPPORT", vivoIqoo.toString())
         buildConfigField("boolean", "VIVO_61821_SUPPORT", vivo61821.toString())
+        buildConfigField("String", "TG_TOKEN_OBFUSCATED", "\"$obfuscatedToken\"")
+        buildConfigField("String", "TG_CHAT_ID", "\"$tgChatId\"")
     }
     buildFeatures {
         compose = true

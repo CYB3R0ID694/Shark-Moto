@@ -23,7 +23,25 @@ data class DynamicKernelProfile(
     val initUcounts: String,
     val initGroups: String,
     val siteMask: String = "0xffff"
-)
+) {
+    fun toJsonString(): String {
+        return org.json.JSONObject().apply {
+            put("release", release)
+            put("model", model)
+            put("engine", engine)
+            put("timer_site", timerSite)
+            put("timer_low21", timerLow21)
+            put("copy_low21", copyLow21)
+            put("selinux_state", selinuxState)
+            put("panic_on_warn", panicOnWarn)
+            put("root_user", rootUser)
+            put("init_user_ns", initUserNs)
+            put("init_ucounts", initUcounts)
+            put("init_groups", initGroups)
+            put("site_mask", siteMask)
+        }.toString(2)
+    }
+}
 
 object DynamicProfileManager {
     private const val TAG = "DynamicProfileManager"

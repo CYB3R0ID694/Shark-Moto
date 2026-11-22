@@ -1213,4 +1213,39 @@ object AppStrings {
         AppLanguage.PT -> "A operação só pode ser executada com segurança uma vez por inicialização. Executar novamente em um estado de kernel modificado pode causar falha do dispositivo.\n\nPor favor, reinicie o dispositivo para tentar novamente."
         else -> "This operation can only be safely executed once per boot session. Running again on an already modified kernel state may cause a device crash or reboot.\n\nPlease reboot your device to run again."
     }
+
+    fun submitDeviceForSupport(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "上传设备信息到支持群组"
+        AppLanguage.RU -> "Отправить данные в группу поддержки"
+        AppLanguage.PT -> "Enviar Dispositivo ao Grupo de Suporte"
+        else -> "Submit Device to Support Group"
+    }
+
+    fun submittingReport(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "正在上传到 Telegram..."
+        AppLanguage.RU -> "Отправка в Telegram..."
+        AppLanguage.PT -> "Enviando ao Telegram..."
+        else -> "Uploading to Telegram..."
+    }
+
+    fun submitReportSuccess(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "已成功上传到 Telegram 支持群组！"
+        AppLanguage.RU -> "Успешно отправлено в группу Telegram!"
+        AppLanguage.PT -> "Enviado com sucesso ao grupo do Telegram!"
+        else -> "Submitted to Telegram group successfully!"
+    }
+
+    fun submitReportFailed(error: String, lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "上传失败：$error"
+        AppLanguage.RU -> "Ошибка отправки: $error"
+        AppLanguage.PT -> "Falha ao enviar: $error"
+        else -> "Upload failed: $error"
+    }
+
+    fun submitProfileToGroup(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "分享配置到支持群组"
+        AppLanguage.RU -> "Поделиться профилем в группе"
+        AppLanguage.PT -> "Share Profile to Support Group"
+        else -> "Share Profile to Support Group"
+    }
 }
