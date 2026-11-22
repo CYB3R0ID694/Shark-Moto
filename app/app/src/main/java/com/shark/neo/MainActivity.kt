@@ -315,6 +315,7 @@ class MainActivity : ComponentActivity() {
     private var softRebooting by mutableStateOf(false)
     private var rerunBlockedDialogVisible by mutableStateOf(false)
     private var bootSessionRan by mutableStateOf(false)
+    private var bypassRebootGuard by mutableStateOf(false)
     private var uploadingReport by mutableStateOf(false)
 
     private val bootPickerLauncher = registerForActivityResult(
@@ -517,7 +518,13 @@ class MainActivity : ComponentActivity() {
         safeModeModules = prefs.getBoolean("safe_mode_modules", false)
         DynamicProfileManager.init(applicationContext)
         dynamicProfileCount = DynamicProfileManager.profileCount()
-        bootSessionRan = runDoneThisBoot()
+        bypassRebootGuard = prefs.getBoolean("bypass_reboot_guard", BuildConfig.VERSION_NAME.contains("Test", ignoreCase = true))
+        if (bypassRebootGuard || BuildConfig.VERSION_NAME.contains("Test", ignoreCase = true)) {
+            prefs.edit().remove("last_run_boot_id").apply()
+            bootSessionRan = false
+        } else {
+            bootSessionRan = runDoneThisBoot()
+        }
         betaChannel = prefs.getBoolean("beta_channel", UpdateChecker.isBetaChannel(this))
         val savedManager = prefs.getString("manager", null)
         manager = runCatching { ManagerKind.valueOf(savedManager ?: "") }.getOrDefault(ManagerKind.KERNELSU)
@@ -1048,10 +1055,18 @@ class MainActivity : ComponentActivity() {
             onDismissRequest = { rerunBlockedDialogVisible = false },
             title = AppStrings.rerunBlockedTitle(appLanguage),
             confirmAction = CouiDialogAction(
-                text = AppStrings.close(appLanguage),
-                onClick = { rerunBlockedDialogVisible = false },
+                text = AppStrings.actionRunAnyway(appLanguage),
+                onClick = {
+                    rerunBlockedDialogVisible = false
+                    clearBootSessionGuard()
+                    runFlow()
+                },
                 style = CouiDialogActionStyle.Primary,
                 colors = CouiDialogDefaults.primaryActionColors(accent)
+            ),
+            dismissAction = CouiDialogAction(
+                text = AppStrings.close(appLanguage),
+                onClick = { rerunBlockedDialogVisible = false }
             ),
             visible = true
         ) {
@@ -2071,7 +2086,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun PrimaryActionCard() {
         val colors = CouiPageDefaults.themeColors()
-        val alreadyRan = bootSessionRan || runDoneThisBoot()
+        val alreadyRan = if (bypassRebootGuard || BuildConfig.VERSION_NAME.contains("Test", ignoreCase = true)) false else (bootSessionRan || runDoneThisBoot())
         val label = when {
             busy -> AppStrings.actionRunning(appLanguage)
             !binderReady -> AppStrings.actionStellarNotRunning(appLanguage)
@@ -2338,6 +2353,14 @@ class MainActivity : ComponentActivity() {
                             title = AppStrings.autoJailbreak(appLanguage),
                             checked = autoJailbreak,
                             onCheckedChange = { updateAutoJailbreak(it) }
+                        )
+                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        SettingSwitchItem(
+                            icon = Icons.Filled.Refresh,
+                            title = AppStrings.bypassRebootGuardTitle(appLanguage),
+                            summary = AppStrings.bypassRebootGuardSummary(appLanguage),
+                            checked = bypassRebootGuard,
+                            onCheckedChange = { updateBypassRebootGuard(it) }
                         )
                         Divider(startIndent = itemDividerIndent(), color = colors.divider)
                     }
@@ -2634,7 +2657,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun updateBypassRebootGuard(value: Boolean) {
+        bypassRebootGuard = value
+        getSharedPreferences("pyb110", MODE_PRIVATE).edit().putBoolean("bypass_reboot_guard", value).apply()
+        if (value) {
+            clearBootSessionGuard()
+        }
+        addLog("Bypass reboot guard: ${if (value) "enabled" else "disabled"}")
+    }
+
+    private fun clearBootSessionGuard() {
+        getSharedPreferences("pyb110", MODE_PRIVATE)
+            .edit()
+            .remove("last_run_boot_id")
+            .apply()
+        lifecycleScope.launch(Dispatchers.Main) {
+            bootSessionRan = false
+        }
+        addLog("[boot-guard] Session lock cleared - re-run unlocked")
+    }
+
     private fun runDoneThisBoot(): Boolean {
+        if (bypassRebootGuard || BuildConfig.VERSION_NAME.contains("Test", ignoreCase = true)) return false
         if (bootSessionRan) return true
         val lastBootId = getSharedPreferences("pyb110", MODE_PRIVATE).getString("last_run_boot_id", null)
         val ran = lastBootId != null && lastBootId == getBootId()
@@ -2643,6 +2687,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun markRunThisBoot() {
+        if (bypassRebootGuard || BuildConfig.VERSION_NAME.contains("Test", ignoreCase = true)) {
+            addLog("[boot-guard] Test build / bypass active: skipping boot lock")
+            return
+        }
         getSharedPreferences("pyb110", MODE_PRIVATE)
             .edit()
             .putString("last_run_boot_id", getBootId())
@@ -4570,7 +4618,9 @@ class MainActivity : ComponentActivity() {
                     ksuActive = active
                     selinuxText = se
                 }
-                markRunThisBoot()
+                if (rc == 0 && active) {
+                    markRunThisBoot()
+                }
                 addLog(if (active) "KernelSU module loaded" else "KernelSU module not loaded")
                 if (rc == 0 && active && !softReboot) {
                     withContext(Dispatchers.Main) { launchManager() }

@@ -1214,6 +1214,27 @@ object AppStrings {
         else -> "This operation can only be safely executed once per boot session. Running again on an already modified kernel state may cause a device crash or reboot.\n\nPlease reboot your device to run again."
     }
 
+    fun actionRunAnyway(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "仍然运行 / 解除锁定"
+        AppLanguage.RU -> "Запустить все равно"
+        AppLanguage.PT -> "Executar Mesmo Assim"
+        else -> "Run Anyway / Reset Lock"
+    }
+
+    fun bypassRebootGuardTitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "绕过重启限制 (测试模式)"
+        AppLanguage.RU -> "Обход блокировки перезагрузки"
+        AppLanguage.PT -> "Ignorar Bloqueio de Reinicialização"
+        else -> "Bypass Reboot Guard (Testing)"
+    }
+
+    fun bypassRebootGuardSummary(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "允许无需重启设备即可反复测试与验证"
+        AppLanguage.RU -> "Разрешить повторный запуск без перезагрузки устройства"
+        AppLanguage.PT -> "Permite testar e verificar repetidamente sem reiniciar o dispositivo"
+        else -> "Allow running and verifying repeatedly without rebooting"
+    }
+
     fun submitDeviceForSupport(lang: AppLanguage): String = when (lang) {
         AppLanguage.ZH -> "上传设备信息到支持群组"
         AppLanguage.RU -> "Отправить данные в группу поддержки"
