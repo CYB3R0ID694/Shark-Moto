@@ -95,9 +95,9 @@ object JailbreakCore {
     }
 
     fun kmiFor(kind: String, release: String): String = when (kind) {
+        "CVE61" -> "android14-6.1"
         "CVE6689", "CVE66118", "CVE66127" -> "android15-6.6"
         "CVE61821" -> "android17-6.18"
-        "CVE61" -> "android14-6.1"
         else -> "android16-6.12"
     }
 
