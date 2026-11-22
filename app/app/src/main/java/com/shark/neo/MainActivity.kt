@@ -3169,6 +3169,13 @@ class MainActivity : ComponentActivity() {
                 )
             ),
             SupportedDeviceEntry(
+                brand = "Realme",
+                name = "Realme NARZO 70 Turbo 5G (RMX5003)",
+                kernels = listOf(
+                    "6.1.128-android14-11-o-g9f6b860b6402"
+                )
+            ),
+            SupportedDeviceEntry(
                 brand = "iQOO / Vivo",
                 name = "iQOO 15 (V2505A) / Ultra / Pad Pro",
                 kernels = listOf(

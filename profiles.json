@@ -61,6 +61,21 @@
       "init_ucounts": "0xffffffc082553d08",
       "init_groups": "0xffffffc082553838",
       "site_mask": "0xffff"
+    },
+    {
+      "release": "6.1.128-android14-11-o-g9f6b860b6402",
+      "model": "realme NARZO 70 Turbo 5G (RMX5003)",
+      "engine": "CVE61",
+      "timer_site": "0xffffffc00857e864",
+      "timer_low21": "0x17e864",
+      "copy_low21": "0x1dd390",
+      "selinux_state": "0xffffffc00a24af98",
+      "panic_on_warn": "0xffffffc009ffae88",
+      "root_user": "0xffffffc00a0208c0",
+      "init_user_ns": "0xffffffc00a020630",
+      "init_ucounts": "0xffffffc00a022148",
+      "init_groups": "0xffffffc00a021be0",
+      "site_mask": "0xffff"
     }
   ]
 }
