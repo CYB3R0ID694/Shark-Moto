@@ -3178,6 +3178,13 @@ class MainActivity : ComponentActivity() {
                     "6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k",
                     "6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k"
                 )
+            ),
+            SupportedDeviceEntry(
+                brand = "Vivo",
+                name = "Vivo X300 Pro (V2514)",
+                kernels = listOf(
+                    "6.12.58-android16-6-g09eda8c8505a-ab15950084-4k"
+                )
             )
         )
         val knownKernels = staticList.flatMap { it.kernels }.toSet()

@@ -46,6 +46,21 @@
       "init_ucounts": "0xffffffc0821e12b0",
       "init_groups": "0xffffffc0821e0d40",
       "site_mask": "0x1fffff"
+    },
+    {
+      "release": "6.12.58-android16-6-g09eda8c8505a-ab15950084-4k",
+      "model": "Vivo X300 Pro (V2514)",
+      "engine": "CVE61258",
+      "timer_site": "0xffffffc080517744",
+      "timer_low21": "0x117744",
+      "copy_low21": "0x1d7440",
+      "selinux_state": "0xffffffc0827c69a0",
+      "panic_on_warn": "0xffffffc08252afe0",
+      "root_user": "0xffffffc082552370",
+      "init_user_ns": "0xffffffc0825520f8",
+      "init_ucounts": "0xffffffc082553d08",
+      "init_groups": "0xffffffc082553838",
+      "site_mask": "0xffff"
     }
   ]
 }
