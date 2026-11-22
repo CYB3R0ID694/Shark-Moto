@@ -8,10 +8,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.zip.GZIPInputStream
+import java.util.zip.ZipInputStream
 
 sealed class ParseResult {
     data class Success(
@@ -34,6 +34,7 @@ object BootSymbolParser {
     private const val NAME_TAIL_SEARCH = 0x40000
     private const val MIN_MARKERS = 8
     private const val MAX_MARKERS = 4096
+    private val SYMBOL_TYPES = "aAbBcCdDeEfFgGiInNpPrRsStTuUvVwW?-".toByteArray(Charsets.US_ASCII).toSet()
 
     suspend fun parseFromUri(context: Context, uri: Uri): ParseResult = withContext(Dispatchers.IO) {
         runCatching {
@@ -48,7 +49,27 @@ object BootSymbolParser {
 
     fun parseBytes(data: ByteArray, filename: String): ParseResult {
         if (data.size < 64) {
-            return ParseResult.Error("File too small ($data.size bytes).")
+            return ParseResult.Error("File too small (${data.size} bytes).")
+        }
+
+        // Check if ZIP archive containing boot.img
+        if (data.size >= 4 && data[0] == 0x50.toByte() && data[1] == 0x4b.toByte() &&
+            data[2] == 0x03.toByte() && data[3] == 0x04.toByte()) {
+            runCatching {
+                ZipInputStream(ByteArrayInputStream(data)).use { zis ->
+                    var entry = zis.nextEntry
+                    while (entry != null) {
+                        val name = entry.name
+                        if (name.endsWith("boot.img", ignoreCase = true) ||
+                            name.equals("boot", ignoreCase = true) ||
+                            name.equals("Image", ignoreCase = true) ||
+                            name.endsWith("kernel", ignoreCase = true)) {
+                            return parseBytes(zis.readBytes(), name)
+                        }
+                        entry = zis.nextEntry
+                    }
+                }
+            }
         }
 
         // Check if text symbol file (e.g. ic-syms.txt)
@@ -60,7 +81,7 @@ object BootSymbolParser {
         // Check container / extract kernel
         val kernelBytes: ByteArray = when {
             // Android Boot Image (v0 - v4)
-            data.take(8).toByteArray().contentEquals("ANDROID!".toByteArray(Charsets.US_ASCII)) -> {
+            data.size >= 8 && data.take(8).toByteArray().contentEquals("ANDROID!".toByteArray(Charsets.US_ASCII)) -> {
                 extractFromBootImg(data) ?: return ParseResult.Error("Failed to extract kernel from boot.img header.")
             }
             else -> data
@@ -115,6 +136,8 @@ object BootSymbolParser {
             appendLine("selinux_state: 0x%x".format(selinuxState))
             appendLine("init_user_ns: 0x%x".format(initUserNs))
             appendLine("panic_on_warn: 0x%x".format(panicOnWarn))
+            appendLine("timer_site: 0x%x (low21: 0x%x)".format(timerSite, timerLow21))
+            appendLine("copy_low21: 0x%x".format(copyLow21))
             appendLine("Total Symbols Recovered: ${syms.size}")
         }
 
@@ -128,12 +151,17 @@ object BootSymbolParser {
         if (!magic.contentEquals("ANDROID!".toByteArray(Charsets.US_ASCII))) return null
 
         val kernelSize = buf.getInt(8).toLong() and 0xFFFFFFFFL
-        val headerVersion = buf.getInt(40)
-        val pageSize = if (headerVersion >= 3) 4096 else buf.getInt(36).let { if (it <= 0) 2048 else it }
+        val headerVersion = if (data.size >= 44) buf.getInt(40) else 0
+        val pageSize = if (headerVersion >= 3) 4096 else {
+            val p = buf.getInt(36)
+            if (p <= 0) 2048 else p
+        }
         val kernelOffset = pageSize
 
-        if (kernelOffset + kernelSize > data.size) return null
-        return data.copyOfRange(kernelOffset, (kernelOffset + kernelSize).toInt())
+        if (kernelOffset >= data.size) return null
+        val available = data.size - kernelOffset
+        val extractLen = if (kernelSize in 1..available) kernelSize.toInt() else available
+        return data.copyOfRange(kernelOffset, kernelOffset + extractLen)
     }
 
     private fun decompressKernel(data: ByteArray): ByteArray? {
@@ -240,94 +268,76 @@ object BootSymbolParser {
 
     fun scanKernelBanner(image: ByteArray): String? {
         val needle = "Linux version ".toByteArray(Charsets.US_ASCII)
-        val idx = indexOfBytes(image, needle)
-        if (idx == -1) return null
+        var searchFrom = 0
+        while (searchFrom < image.size) {
+            val idx = indexOfBytes(image, needle, searchFrom)
+            if (idx == -1) return null
 
-        var start = idx + needle.size
-        while (start < image.size && (image[start] == ' '.code.toByte() || image[start] == '\t'.code.toByte())) {
-            start++
+            var start = idx + needle.size
+            while (start < image.size && (image[start] == ' '.code.toByte() || image[start] == '\t'.code.toByte())) {
+                start++
+            }
+            var end = start
+            while (end < image.size && image[end] != 0.toByte() && image[end] != ' '.code.toByte() &&
+                image[end] != '\r'.code.toByte() && image[end] != '\n'.code.toByte()) {
+                end++
+            }
+            if (end > start) {
+                val candidate = String(image, start, end - start, Charsets.US_ASCII).trim()
+                if (candidate.isNotEmpty() && candidate[0].isDigit() && candidate.contains(".")) {
+                    return candidate
+                }
+            }
+            searchFrom = idx + 1
         }
-        var end = start
-        while (end < image.size && image[end] != 0.toByte() && image[end] != ' '.code.toByte() &&
-            image[end] != '\r'.code.toByte() && image[end] != '\n'.code.toByte()) {
-            end++
-        }
-        if (end <= start) return null
-        return String(image, start, end - start, Charsets.US_ASCII).trim()
+        return null
     }
 
-    private fun recoverKallsyms(image: ByteArray): Map<String, Long>? {
+    private data class TokenTable(
+        val tokens: List<ByteArray>,
+        val tableOffset: Int,
+        val indexOffset: Int
+    )
+
+    private fun findTokenTables(image: ByteArray): List<TokenTable> {
         val digitNeedle = ByteArray(20).apply {
             for (d in 0..9) {
                 this[d * 2] = ('0'.code + d).toByte()
                 this[d * 2 + 1] = 0
             }
         }
-        var digitOffset = indexOfBytes(image, digitNeedle)
-        if (digitOffset < 0) return null
+        val tables = mutableListOf<TokenTable>()
+        var searchFrom = 0
+        while (searchFrom < image.size) {
+            val digitOffset = indexOfBytes(image, digitNeedle, searchFrom)
+            if (digitOffset < 0) break
 
-        // Locate token table
-        val earliest = maxOf(0, digitOffset - '0'.code * (MAX_TOKEN_LEN + 1))
-        var start = (earliest + ALIGN - 1) and -ALIGN
-        var tokenTable: List<ByteArray>? = null
-        var tokenTableOff = 0
-        var indexOff = 0
-
-        while (start <= digitOffset) {
-            val res = parseTokenTableAt(image, start, digitOffset)
-            if (res != null) {
-                tokenTable = res.first
-                tokenTableOff = start
-                indexOff = res.second
-                break
-            }
-            start += ALIGN
-        }
-        if (tokenTable == null) return null
-
-        // Search for markers & names
-        val lower = maxOf(0, tokenTableOff - MARKER_SEARCH_WINDOW)
-        var pos = (lower + ALIGN - 1) and -ALIGN
-        while (pos + 8 <= tokenTableOff) {
-            val markers = readMarkers(image, pos, tokenTableOff)
-            if (markers.size >= MIN_MARKERS) {
-                val minCount = (markers.size - 1) * 256 + 1
-                val maxCount = markers.size * 256
-                val approxNames = pos - markers.last()
-                if (approxNames >= 0) {
-                    val searchStart = maxOf(0, approxNames - NAME_TAIL_SEARCH)
-                    var nso = approxNames - (approxNames % ALIGN)
-                    while (nso >= searchStart) {
-                        if (nso + 8 <= image.size) {
-                            val count = readU32(image, nso).toInt()
-                            val zeroPad = readU32(image, nso + 4) == 0L
-                            if (count in minCount..maxCount && zeroPad) {
-                                val spans = parseNameSpans(image, nso + ALIGN, count, pos, markers)
-                                if (spans != null) {
-                                    val names = decodeNames(image, spans, tokenTable)
-                                    if (names != null) {
-                                        val syms = decodeAddresses(image, names, nso - ALIGN, tokenTableOff, indexOff)
-                                        if (syms != null) return syms
-                                    }
-                                }
-                            }
-                        }
-                        nso -= ALIGN
-                    }
+            val earliest = maxOf(0, digitOffset - '0'.code * (MAX_TOKEN_LEN + 1))
+            var start = (earliest + ALIGN - 1) and -ALIGN
+            while (start <= digitOffset) {
+                val t = parseTokenTableAt(image, start, digitOffset)
+                if (t != null) {
+                    tables.add(t)
                 }
+                start += ALIGN
             }
-            pos += ALIGN
+            searchFrom = digitOffset + 1
         }
-        return null
+        return tables
     }
 
-    private fun parseTokenTableAt(image: ByteArray, start: Int, digitOffset: Int): Pair<List<ByteArray>, Int>? {
-        var pos = start
+    private fun parseTokenTableAt(image: ByteArray, start: Int, digitOffset: Int): TokenTable? {
+        if (start % ALIGN != 0) return null
         val tokens = ArrayList<ByteArray>(TOKEN_COUNT)
         val tokenOffsets = ArrayList<Int>(TOKEN_COUNT)
+        val tokenStarts = ArrayList<Int>(TOKEN_COUNT)
+        var pos = start
 
         for (i in 0 until TOKEN_COUNT) {
+            tokenStarts.add(pos)
             val searchEnd = minOf(pos + MAX_TOKEN_LEN + 1, image.size)
+            if (pos >= searchEnd) return null
+
             var zeroIdx = -1
             for (p in pos until searchEnd) {
                 if (image[p] == 0.toByte()) {
@@ -337,25 +347,48 @@ object BootSymbolParser {
             }
             if (zeroIdx == -1 || zeroIdx == pos) return null
             val token = image.copyOfRange(pos, zeroIdx)
+            for (b in token) {
+                val u = b.toInt() and 0xff
+                if (u !in 0x20..0x7e) return null
+            }
             tokenOffsets.add(pos - start)
             tokens.add(token)
             pos = zeroIdx + 1
         }
 
-        val idxOff = (pos + ALIGN - 1) and -ALIGN
-        if (idxOff + TOKEN_INDEX_SIZE > image.size) return null
-        for (i in 0 until TOKEN_COUNT) {
-            val off = (image[idxOff + i * 2].toInt() and 0xff) or ((image[idxOff + i * 2 + 1].toInt() and 0xff) shl 8)
-            if (off != tokenOffsets[i]) return null
+        if (tokenStarts['0'.code] != digitOffset) return null
+
+        val checkChars = "0123456789_abcdefghijklmnopqrstuvwxyzT"
+        for (ch in checkChars) {
+            val tok = tokens[ch.code]
+            if (tok.size != 1 || tok[0] != ch.code.toByte()) return null
         }
-        return Pair(tokens, idxOff)
+
+        val indexOffset = (pos + ALIGN - 1) and -ALIGN
+        if (pos < indexOffset) {
+            for (p in pos until indexOffset) {
+                if (image[p] != 0.toByte()) return null
+            }
+        }
+
+        val indexEnd = indexOffset + TOKEN_INDEX_SIZE
+        if (indexEnd > image.size || tokenOffsets.last() > 0xFFFF) return null
+
+        for (idx in 0 until TOKEN_COUNT) {
+            val expected = tokenOffsets[idx]
+            val actual = (image[indexOffset + idx * 2].toInt() and 0xff) or
+                    ((image[indexOffset + idx * 2 + 1].toInt() and 0xff) shl 8)
+            if (actual != expected) return null
+        }
+
+        return TokenTable(tokens, start, indexOffset)
     }
 
     private fun readMarkers(image: ByteArray, start: Int, limit: Int): List<Int> {
-        if (start + 8 > limit) return emptyList()
+        if (start % ALIGN != 0 || start + 8 > limit) return emptyList()
         val first = readU32(image, start)
         val second = readU32(image, start + 4)
-        if (first != 0L || second !in 0x200..0x40000) return emptyList()
+        if (first != 0L || second !in 0x200L..0x40000L) return emptyList()
 
         val markers = ArrayList<Int>()
         markers.add(first.toInt())
@@ -371,68 +404,241 @@ object BootSymbolParser {
         return if (markers.size >= MIN_MARKERS) markers else emptyList()
     }
 
-    private fun parseNameSpans(image: ByteArray, namesOff: Int, count: Int, markersOff: Int, markers: List<Int>): List<Pair<Int, Int>>? {
+    private fun parseNameSpans(
+        image: ByteArray,
+        namesOffset: Int,
+        count: Int,
+        markersOffset: Int,
+        markers: List<Int>,
+        uleb: Boolean
+    ): List<Pair<Int, Int>>? {
+        if (count == 0 || markers.size != (count + 255) / 256) return null
         val spans = ArrayList<Pair<Int, Int>>(count)
-        var pos = namesOff
-        for (i in 0 until count) {
-            if (i % 256 == 0 && (pos - namesOff) != markers[i / 256]) return null
-            if (pos >= markersOff) return null
-            val len = image[pos++].toInt() and 0xff
-            if (len == 0 || pos + len > markersOff) return null
-            spans.add(Pair(pos, len))
-            pos += len
+        var pos = namesOffset
+
+        for (index in 0 until count) {
+            if (index % 256 == 0 && (pos - namesOffset) != markers[index / 256]) {
+                return null
+            }
+            if (pos >= markersOffset) return null
+
+            var length = image[pos++].toInt() and 0xff
+            if (uleb && (length and 0x80) != 0) {
+                if (pos >= markersOffset) return null
+                val high = image[pos++].toInt() and 0xff
+                if ((high and 0x80) != 0) return null
+                length = (length and 0x7f) or (high shl 7)
+                pos++ // consumed high byte
+            }
+            if (length == 0 || length > 0x3fff || pos + length > markersOffset) return null
+            spans.add(Pair(pos, length))
+            pos += length
+        }
+
+        val aligned = (pos + ALIGN - 1) and -ALIGN
+        if (aligned != markersOffset) return null
+        for (p in pos until markersOffset) {
+            if (image[p] != 0.toByte()) return null
         }
         return spans
     }
 
-    private fun decodeNames(image: ByteArray, spans: List<Pair<Int, Int>>, tokens: List<ByteArray>): List<Pair<Byte, String>>? {
-        val names = ArrayList<Pair<Byte, String>>(spans.size)
-        val needed = setOf("_text", "selinux_state", "init_user_ns")
-        var matched = 0
+    private fun decodeNames(
+        image: ByteArray,
+        spans: List<Pair<Int, Int>>,
+        tokens: List<ByteArray>
+    ): List<Pair<Byte, String>>? {
+        val decoded = ArrayList<Pair<Byte, String>>(spans.size)
+        val nameSet = HashSet<String>(spans.size)
 
-        for ((pos, len) in spans) {
+        for ((pos, length) in spans) {
             val out = ByteArrayOutputStream()
-            for (p in pos until pos + len) {
-                out.write(tokens[image[p].toInt() and 0xff])
+            for (p in pos until pos + length) {
+                val tokIdx = image[p].toInt() and 0xff
+                if (tokIdx >= tokens.size) return null
+                out.write(tokens[tokIdx])
             }
             val expanded = out.toByteArray()
-            if (expanded.isEmpty()) return null
+            if (expanded.isEmpty() || expanded.size > 4096) return null
+
             val kind = expanded[0]
-            val name = String(expanded, 1, expanded.size - 1, Charsets.US_ASCII)
-            names.add(Pair(kind, name))
-            if (name in needed) matched++
+            if (kind !in SYMBOL_TYPES) return null
+
+            val nameBytes = expanded.copyOfRange(1, expanded.size)
+            if (nameBytes.isEmpty()) return null
+
+            for (b in nameBytes) {
+                val u = b.toInt() and 0xff
+                if (u !in 0x21..0x7e) return null
+            }
+            val name = String(nameBytes, Charsets.US_ASCII)
+            decoded.add(Pair(kind, name))
+            nameSet.add(name)
         }
-        return if (matched >= needed.size) names else null
+
+        if ("_text" !in nameSet) return null
+        return decoded
     }
 
-    private fun decodeAddresses(image: ByteArray, names: List<Pair<Byte, String>>, oldBaseOff: Int, tokenOff: Int, idxOff: Int): Map<String, Long>? {
-        val count = names.size
-        // Test pre-6.4 layout
-        val oldOffsets = oldBaseOff - ((count * 4 + ALIGN - 1) and -ALIGN)
-        val symsPre64 = decodeWithOffsets(image, names, oldOffsets, oldBaseOff)
-        if (symsPre64 != null) return symsPre64
+    private data class RecoveredNameTable(
+        val numSymsOffset: Int,
+        val namesOffset: Int,
+        val markersOffset: Int,
+        val names: List<Pair<Byte, String>>
+    )
 
-        // Test 6.4+ layout
-        val newOffsets = (idxOff + TOKEN_INDEX_SIZE + ALIGN - 1) and -ALIGN
-        val newBaseOff = (newOffsets + count * 4 + ALIGN - 1) and -ALIGN
-        return decodeWithOffsets(image, names, newOffsets, newBaseOff)
+    private fun findNameTables(
+        image: ByteArray,
+        tokens: List<ByteArray>,
+        tokenTableOffset: Int
+    ): List<RecoveredNameTable> {
+        val lower = maxOf(0, tokenTableOffset - MARKER_SEARCH_WINDOW)
+        val markerCandidates = mutableListOf<Pair<Int, List<Int>>>()
+        var pos = (lower + ALIGN - 1) and -ALIGN
+        while (pos + 8 <= tokenTableOffset) {
+            val m = readMarkers(image, pos, tokenTableOffset)
+            if (m.isNotEmpty()) {
+                markerCandidates.add(Pair(pos, m))
+            }
+            pos += ALIGN
+        }
+
+        val recovered = mutableListOf<RecoveredNameTable>()
+        for ((markersOffset, markers) in markerCandidates) {
+            val minCount = (markers.size - 1) * 256 + 1
+            val maxCount = markers.size * 256
+            val approxNames = markersOffset - markers.last()
+            if (approxNames < 0) continue
+
+            val searchStart = maxOf(0, approxNames - NAME_TAIL_SEARCH)
+            var nso = approxNames - (approxNames % ALIGN)
+            while (true) {
+                if (nso + 8 <= image.size) {
+                    val count = readU32(image, nso).toInt()
+                    val paddingZero = readU32(image, nso + 4) == 0L
+                    if (count in minCount..maxCount && paddingZero) {
+                        val namesOffset = nso + ALIGN
+                        for (uleb in listOf(true, false)) {
+                            val spans = parseNameSpans(image, namesOffset, count, markersOffset, markers, uleb)
+                            if (spans != null) {
+                                val decoded = decodeNames(image, spans, tokens)
+                                if (decoded != null) {
+                                    recovered.add(RecoveredNameTable(nso, namesOffset, markersOffset, decoded))
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+                if (nso < searchStart + ALIGN) break
+                nso -= ALIGN
+            }
+        }
+        return recovered
     }
 
-    private fun decodeWithOffsets(image: ByteArray, names: List<Pair<Byte, String>>, offsetsOff: Int, baseOff: Int): Map<String, Long>? {
-        if (offsetsOff < 0 || baseOff + 8 > image.size) return null
-        val base = readU64(image, baseOff)
-        if ((base ushr 48) != 0xffffL) return null
+    private fun isArm64KernelAddress(addr: Long): Boolean {
+        return (addr ushr 48) == 0xffffL && (addr % 4096L == 0L)
+    }
 
+    private fun decodeAddresses(
+        image: ByteArray,
+        names: List<Pair<Byte, String>>,
+        offsetsOffset: Int,
+        relativeBaseOffset: Int
+    ): Map<String, Long>? {
         val count = names.size
-        val result = HashMap<String, Long>(1024)
+        val offsetsEnd = offsetsOffset + count * 4
+        if (offsetsEnd > image.size) return null
+        if (relativeBaseOffset < offsetsEnd || relativeBaseOffset + 8 > image.size) return null
+        for (p in offsetsEnd until relativeBaseOffset) {
+            if (image[p] != 0.toByte()) return null
+        }
+
+        val relativeBase = readU64(image, relativeBaseOffset)
+        if (!isArm64KernelAddress(relativeBase)) return null
+
+        val signedOffsets = IntArray(count)
+        var negativeCount = 0
         for (i in 0 until count) {
-            val off = readI32(image, offsetsOff + i * 4)
-            val addr = if (off < 0) base - 1L - off else base + (off.toLong() and 0xFFFFFFFFL)
-            result[names[i].second] = addr
+            val off = readI32(image, offsetsOffset + i * 4)
+            signedOffsets[i] = off
+            if (off < 0) negativeCount++
         }
 
-        if (result["_text"] == base && result.containsKey("selinux_state")) {
-            return result
+        val addresses = LongArray(count)
+        if (negativeCount * 2 >= count) {
+            for (i in 0 until count) {
+                val off = signedOffsets[i]
+                val addr = if (off < 0) {
+                    relativeBase - 1L - off.toLong()
+                } else {
+                    off.toLong() and 0xFFFFFFFFL
+                }
+                addresses[i] = addr
+            }
+        } else {
+            for (i in 0 until count) {
+                val off = signedOffsets[i]
+                addresses[i] = relativeBase + (off.toLong() and 0xFFFFFFFFL)
+            }
+        }
+
+        // Monotonic check
+        for (i in 0 until count - 1) {
+            if (java.lang.Long.compareUnsigned(addresses[i], addresses[i + 1]) > 0) {
+                return null
+            }
+        }
+
+        var textAddr: Long? = null
+        for (i in 0 until count) {
+            if (names[i].second == "_text") {
+                if (textAddr != null) return null
+                textAddr = addresses[i]
+            }
+        }
+        if (textAddr == null || textAddr != relativeBase) return null
+
+        val syms = HashMap<String, Long>(count)
+        for (i in 0 until count) {
+            val name = names[i].second
+            if (!syms.containsKey(name)) {
+                syms[name] = addresses[i]
+            }
+        }
+        return syms
+    }
+
+    private fun recoverKallsyms(image: ByteArray): Map<String, Long>? {
+        val tokenTables = findTokenTables(image)
+        Log.d(TAG, "Found ${tokenTables.size} token table candidate(s)")
+        if (tokenTables.isEmpty()) return null
+
+        for (table in tokenTables) {
+            val nameTables = findNameTables(image, table.tokens, table.tableOffset)
+            Log.d(TAG, "Found ${nameTables.size} name table candidate(s) for table at 0x${table.tableOffset.toString(16)}")
+            for (nt in nameTables) {
+                val count = nt.names.size
+                val oldRelativeBase = nt.numSymsOffset - ALIGN
+                val oldOffsets = oldRelativeBase - ((count * 4 + ALIGN - 1) and -ALIGN)
+                val newOffsets = (table.indexOffset + TOKEN_INDEX_SIZE + ALIGN - 1) and -ALIGN
+                val newRelativeBase = (newOffsets + count * 4 + ALIGN - 1) and -ALIGN
+
+                // Try 6.4+ layout first
+                var syms = decodeAddresses(image, nt.names, newOffsets, newRelativeBase)
+                if (syms != null) {
+                    Log.i(TAG, "Successfully decoded kallsyms using 6.4+ layout (${syms.size} symbols)")
+                    return syms
+                }
+
+                // Try pre-6.4 layout
+                syms = decodeAddresses(image, nt.names, oldOffsets, oldRelativeBase)
+                if (syms != null) {
+                    Log.i(TAG, "Successfully decoded kallsyms using pre-6.4 layout (${syms.size} symbols)")
+                    return syms
+                }
+            }
         }
         return null
     }
@@ -494,64 +700,143 @@ object BootSymbolParser {
         val siteMask: String
     )
 
-    private fun deriveEngineAndSites(banner: String, image: ByteArray, syms: Map<String, Long>): EngineSites {
-        return when {
-            banner.startsWith("6.1.") -> {
-                // Linux 6.1 GKI
-                EngineSites(
-                    engine = "CVE61",
-                    timerSite = 0xffffffc008192b38UL.toLong(),
-                    timerLow21 = 0x192b38L,
-                    copyLow21 = 0xab948L,
-                    siteMask = "0xffff"
-                )
-            }
-            banner.startsWith("6.6.") -> {
-                // Linux 6.6 GKI
-                EngineSites(
-                    engine = "CVE6689",
-                    timerSite = 0xffffffc080193b40UL.toLong(),
-                    timerLow21 = 0x193b40L,
-                    copyLow21 = 0x0aa5e0L,
-                    siteMask = "0x1fffff"
-                )
-            }
-            banner.startsWith("6.12.") -> {
-                // Linux 6.12 GKI
-                EngineSites(
-                    engine = "CVE61230",
-                    timerSite = 0xffffffc0801e1a14UL.toLong(),
-                    timerLow21 = 0x1e1a14L,
-                    copyLow21 = 0x0d1598L,
-                    siteMask = "0xffff"
-                )
-            }
-            banner.startsWith("6.18.") -> {
-                // Linux 6.18
-                EngineSites(
-                    engine = "CVE61821",
-                    timerSite = 0xffffffc080201a14UL.toLong(),
-                    timerLow21 = 0x201a14L,
-                    copyLow21 = 0x0e2598L,
-                    siteMask = "0xffff"
-                )
-            }
-            else -> {
-                EngineSites(
-                    engine = "CVE61",
-                    timerSite = 0xffffffc008192b38UL.toLong(),
-                    timerLow21 = 0x192b38L,
-                    copyLow21 = 0xab948L,
-                    siteMask = "0xffff"
-                )
+    private fun findCallSiteInFunction(
+        image: ByteArray,
+        funcAddr: Long,
+        baseAddr: Long,
+        targetAddr: Long,
+        maxInstructions: Int = 300
+    ): Long? {
+        val funcOffset = (funcAddr - baseAddr).toInt()
+        if (funcOffset < 0 || funcOffset + maxInstructions * 4 > image.size) return null
+
+        for (i in 0 until maxInstructions) {
+            val pcOffset = funcOffset + i * 4
+            val pc = baseAddr + pcOffset
+            val insn = readI32(image, pcOffset)
+            // BL instruction: opcode bits 31..26 are 100101 (0x25)
+            if ((insn ushr 26) == 0x25) {
+                var imm26 = insn and 0x03FFFFFF
+                if ((imm26 and 0x02000000) != 0) {
+                    imm26 = imm26 or (-1 shl 26)
+                }
+                val destAddr = pc + (imm26.toLong() * 4L)
+                if (destAddr == targetAddr) {
+                    return pc + 4L // Return address after BL
+                }
             }
         }
+        return null
     }
 
-    private fun indexOfBytes(haystack: ByteArray, needle: ByteArray): Int {
-        if (needle.isEmpty() || haystack.size < needle.size) return -1
+    private fun deriveEngineAndSites(banner: String, image: ByteArray, syms: Map<String, Long>): EngineSites {
+        val base = syms["_text"] ?: 0L
+
+        // Default engine selection
+        val engine = when {
+            banner.contains("6.6.118") -> "CVE66118"
+            banner.contains("6.6.127") -> "CVE66127"
+            banner.contains("6.6.89") || banner.startsWith("6.6.") -> "CVE6689"
+            banner.contains("6.12.58") -> "CVE61258"
+            banner.contains("6.12.69") -> "CVE61269"
+            banner.contains("6.12.38") -> "CVE61238"
+            banner.contains("6.12.30") -> "CVE61230"
+            banner.contains("6.12.23") -> "CVE61223"
+            banner.startsWith("6.18.") -> "CVE61821"
+            banner.startsWith("6.1.") -> "CVE61"
+            else -> "CVE66118"
+        }
+
+        // Baseline defaults
+        var defaultTimerSite = 0xffffffc0801a4dfcUL.toLong()
+        var defaultTimerLow21 = 0x1a4dfcL
+        var defaultCopyLow21 = 0x0ab944L
+        val siteMask = if (banner.startsWith("6.6.")) "0x1fffff" else "0xffff"
+
+        when {
+            banner.startsWith("6.1.") -> {
+                defaultTimerSite = 0xffffffc008192b38UL.toLong()
+                defaultTimerLow21 = 0x192b38L
+                defaultCopyLow21 = 0xab948L
+            }
+            banner.startsWith("6.12.") -> {
+                defaultTimerSite = 0xffffffc0801e1a14UL.toLong()
+                defaultTimerLow21 = 0x1e1a14L
+                defaultCopyLow21 = 0x0d1598L
+            }
+            banner.startsWith("6.18.") -> {
+                defaultTimerSite = 0xffffffc080201a14UL.toLong()
+                defaultTimerLow21 = 0x201a14L
+                defaultCopyLow21 = 0x0e2598L
+            }
+            banner.startsWith("6.6.") -> {
+                defaultTimerSite = 0xffffffc0801a4dfcUL.toLong()
+                defaultTimerLow21 = 0x1a4dfcL
+                defaultCopyLow21 = 0x0ab944L
+            }
+        }
+
+        // Dynamic callsite discovery if uncompressed kernel image is available
+        var dynTimerSite: Long? = null
+        var dynCopyLow21: Long? = null
+
+        if (image.isNotEmpty() && base != 0L) {
+            val allocTargets = listOfNotNull(
+                syms["kmem_cache_alloc"],
+                syms["kmem_cache_alloc_node"],
+                syms["kmem_cache_alloc_trace"],
+                syms["kmem_cache_alloc_lru"]
+            )
+            val timerFuncs = listOfNotNull(
+                syms["do_timer_create"],
+                syms["__arm64_sys_timer_create"],
+                syms["sys_timer_create"]
+            )
+            val copyFuncs = listOfNotNull(
+                syms["copy_process"],
+                syms["dup_task_struct"]
+            )
+
+            for (tFunc in timerFuncs) {
+                for (aTarget in allocTargets) {
+                    val site = findCallSiteInFunction(image, tFunc, base, aTarget)
+                    if (site != null) {
+                        dynTimerSite = site
+                        break
+                    }
+                }
+                if (dynTimerSite != null) break
+            }
+
+            for (cFunc in copyFuncs) {
+                for (aTarget in allocTargets) {
+                    val site = findCallSiteInFunction(image, cFunc, base, aTarget)
+                    if (site != null) {
+                        dynCopyLow21 = site and 0x1fffffL
+                        break
+                    }
+                }
+                if (dynCopyLow21 != null) break
+            }
+        }
+
+        val timerSite = dynTimerSite ?: defaultTimerSite
+        val timerLow21 = dynTimerSite?.let { it and 0x1fffffL } ?: defaultTimerLow21
+        val copyLow21 = dynCopyLow21 ?: defaultCopyLow21
+
+        return EngineSites(
+            engine = engine,
+            timerSite = timerSite,
+            timerLow21 = timerLow21,
+            copyLow21 = copyLow21,
+            siteMask = siteMask
+        )
+    }
+
+    private fun indexOfBytes(haystack: ByteArray, needle: ByteArray, fromIndex: Int = 0): Int {
+        if (needle.isEmpty() || haystack.size < needle.size || fromIndex < 0) return -1
         val max = haystack.size - needle.size
-        for (i in 0..max) {
+        for (i in fromIndex..max) {
             var found = true
             for (j in needle.indices) {
                 if (haystack[i + j] != needle[j]) {
