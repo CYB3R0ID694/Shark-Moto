@@ -81,6 +81,45 @@ object DynamicProfileManager {
 
     fun allProfiles(): List<DynamicKernelProfile> = profiles.values.toList()
 
+    fun addProfile(context: Context, profile: DynamicKernelProfile) {
+        profiles[profile.release] = profile
+        saveProfiles(context)
+    }
+
+    fun removeProfile(context: Context, release: String) {
+        profiles.remove(release)
+        saveProfiles(context)
+    }
+
+    private fun saveProfiles(context: Context) {
+        runCatching {
+            val json = JSONObject()
+            json.put("version", 1)
+            val arr = org.json.JSONArray()
+            for (p in profiles.values) {
+                val obj = JSONObject().apply {
+                    put("release", p.release)
+                    put("model", p.model)
+                    put("engine", p.engine)
+                    put("timer_site", p.timerSite)
+                    put("timer_low21", p.timerLow21)
+                    put("copy_low21", p.copyLow21)
+                    put("selinux_state", p.selinuxState)
+                    put("panic_on_warn", p.panicOnWarn)
+                    put("root_user", p.rootUser)
+                    put("init_user_ns", p.initUserNs)
+                    put("init_ucounts", p.initUcounts)
+                    put("init_groups", p.initGroups)
+                    put("site_mask", p.siteMask)
+                }
+                arr.put(obj)
+            }
+            json.put("profiles", arr)
+            val local = File(context.filesDir, FILE_NAME)
+            local.writeText(json.toString(2))
+        }.onFailure { Log.e(TAG, "Failed to save profiles: ${it.message}") }
+    }
+
     suspend fun syncRemote(context: Context): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             val conn = (URL(REMOTE_URL).openConnection() as HttpURLConnection).apply {

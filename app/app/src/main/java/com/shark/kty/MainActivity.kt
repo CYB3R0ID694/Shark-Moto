@@ -16,6 +16,7 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -88,6 +89,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PowerSettingsNew
@@ -306,6 +308,20 @@ class MainActivity : ComponentActivity() {
     private var betaChannel by mutableStateOf(false)
     private var syncingProfiles by mutableStateOf(false)
     private var dynamicProfileCount by mutableStateOf(0)
+    private var parsingBoot by mutableStateOf(false)
+    private var parseResultDialog by mutableStateOf<ParseResult?>(null)
+    private var softRebootDialogVisible by mutableStateOf(false)
+    private var softRebooting by mutableStateOf(false)
+    private var rerunBlockedDialogVisible by mutableStateOf(false)
+    private var bootSessionRan by mutableStateOf(false)
+
+    private val bootPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            parseBootUri(uri)
+        }
+    }
     private var legalAccepted by mutableStateOf(false)
     private var languageChosen by mutableStateOf(false)
     private var appLanguage by mutableStateOf(AppLanguage.EN)
@@ -499,6 +515,7 @@ class MainActivity : ComponentActivity() {
         safeModeModules = prefs.getBoolean("safe_mode_modules", false)
         DynamicProfileManager.init(applicationContext)
         dynamicProfileCount = DynamicProfileManager.profileCount()
+        bootSessionRan = runDoneThisBoot()
         betaChannel = prefs.getBoolean("beta_channel", UpdateChecker.isBetaChannel(this))
         val savedManager = prefs.getString("manager", null)
         manager = runCatching { ManagerKind.valueOf(savedManager ?: "") }.getOrDefault(ManagerKind.KERNELSU)
@@ -885,6 +902,124 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
+    private fun ParseResultDialog() {
+        val result = parseResultDialog ?: return
+        val scheme = CouiTheme.colorScheme
+        val accent = scheme.accent
+        val isSuccess = result is ParseResult.Success
+
+        Dialog(
+            onDismissRequest = { parseResultDialog = null },
+            title = if (isSuccess) "Kernel Symbol Parser" else "Parser Error",
+            confirmAction = CouiDialogAction(
+                text = AppStrings.close(appLanguage),
+                onClick = { parseResultDialog = null },
+                style = CouiDialogActionStyle.Primary,
+                colors = CouiDialogDefaults.primaryActionColors(accent)
+            ),
+            visible = true
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CouiDialogDefaults.contentPadding)
+            ) {
+                when (result) {
+                    is ParseResult.Success -> {
+                        Text(
+                            text = AppStrings.parseBootSuccess(result.banner, result.symbolsCount, appLanguage),
+                            kind = CouiTextKind.SectionTitle,
+                            color = scheme.onSurface
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = result.details,
+                            kind = CouiTextKind.Description,
+                            color = scheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                    is ParseResult.Error -> {
+                        Text(
+                            text = AppStrings.parseBootFailed(result.message, appLanguage),
+                            kind = CouiTextKind.SectionTitle,
+                            color = Color(0xFFD32F2F)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun SoftRebootConfirmDialog() {
+        if (!softRebootDialogVisible) return
+        val scheme = CouiTheme.colorScheme
+        val accent = scheme.accent
+
+        Dialog(
+            onDismissRequest = { softRebootDialogVisible = false },
+            title = AppStrings.softRebootNow(appLanguage),
+            confirmAction = CouiDialogAction(
+                text = AppStrings.confirmSoftReboot(appLanguage),
+                onClick = {
+                    softRebootDialogVisible = false
+                    performSoftReboot()
+                },
+                style = CouiDialogActionStyle.Primary,
+                colors = CouiDialogDefaults.primaryActionColors(accent)
+            ),
+            dismissAction = CouiDialogAction(
+                text = AppStrings.cancel(appLanguage),
+                onClick = { softRebootDialogVisible = false }
+            ),
+            visible = true
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CouiDialogDefaults.contentPadding)
+            ) {
+                Text(
+                    text = AppStrings.softRebootExplanation(appLanguage),
+                    kind = CouiTextKind.Description,
+                    color = scheme.onSurface
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun RerunBlockedDialog() {
+        if (!rerunBlockedDialogVisible) return
+        val scheme = CouiTheme.colorScheme
+        val accent = scheme.accent
+
+        Dialog(
+            onDismissRequest = { rerunBlockedDialogVisible = false },
+            title = AppStrings.rerunBlockedTitle(appLanguage),
+            confirmAction = CouiDialogAction(
+                text = AppStrings.close(appLanguage),
+                onClick = { rerunBlockedDialogVisible = false },
+                style = CouiDialogActionStyle.Primary,
+                colors = CouiDialogDefaults.primaryActionColors(accent)
+            ),
+            visible = true
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CouiDialogDefaults.contentPadding)
+            ) {
+                Text(
+                    text = AppStrings.rerunBlockedMessage(appLanguage),
+                    kind = CouiTextKind.Description,
+                    color = scheme.onSurface
+                )
+            }
+        }
+    }
+
+    @Composable
     private fun AppRoot() {
         if (!languageChosen) {
             LanguageGate(onAccept = { chosen ->
@@ -1023,6 +1158,9 @@ class MainActivity : ComponentActivity() {
         LicenseDetailDialog()
         DonateDialog()
         LanguageSelectDialog()
+        ParseResultDialog()
+        SoftRebootConfirmDialog()
+        RerunBlockedDialog()
     }
 
     @Composable
@@ -1707,6 +1845,11 @@ class MainActivity : ComponentActivity() {
             item {
                 PrimaryActionCard()
             }
+            if (ksuActive) {
+                item {
+                    SoftRebootCard()
+                }
+            }
             item {
                 HomeEntriesCard()
             }
@@ -1754,6 +1897,38 @@ class MainActivity : ComponentActivity() {
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = AppStrings.unsupportedKernelBannerDesc(appLanguage),
+                            kind = CouiTextKind.PreferenceSummary,
+                            color = colors.summary
+                        )
+                    }
+                }
+            }
+            Divider(startIndent = itemDividerIndent(), color = colors.divider)
+            Item(
+                onClick = { launchBootPicker() },
+                enabled = !parsingBoot,
+                trailing = { Chevron() }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AppIcon(
+                        icon = Icons.Filled.Memory,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = amberTint
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (parsingBoot) AppStrings.parsingBootTitle(appLanguage) else AppStrings.parseBootImage(appLanguage),
+                            kind = CouiTextKind.SectionTitle,
+                            color = colors.title
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = AppStrings.parseBootImageSummary(appLanguage),
                             kind = CouiTextKind.PreferenceSummary,
                             color = colors.summary
                         )
@@ -1814,14 +1989,17 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun PrimaryActionCard() {
         val colors = CouiPageDefaults.themeColors()
+        val alreadyRan = bootSessionRan || runDoneThisBoot()
         val label = when {
             busy -> AppStrings.actionRunning(appLanguage)
             !binderReady -> AppStrings.actionStellarNotRunning(appLanguage)
             !authorized -> AppStrings.actionAuthorizeShizuku(appLanguage)
+            alreadyRan -> AppStrings.rebootRequiredAlreadyRan(appLanguage)
             exploit == ExploitKind.UNSUPPORTED -> AppStrings.actionDiagnoseAndReport(appLanguage)
             ksuActive -> AppStrings.actionReRoot(appLanguage)
             else -> AppStrings.actionOneClickRoot(appLanguage)
         }
+        val isWarning = alreadyRan && !busy && binderReady && authorized
         Group {
             Item(
                 onClick = {
@@ -1832,6 +2010,10 @@ class MainActivity : ComponentActivity() {
                                 PrivService.openManager(applicationContext)
                             }
                             !authorized -> PrivService.request(REQ_SHIZUKU)
+                            alreadyRan -> {
+                                addLog("[boot-guard] Refusing rerun in the same boot session - device reboot required")
+                                rerunBlockedDialogVisible = true
+                            }
                             exploit == ExploitKind.UNSUPPORTED -> {
                                 showDiagnostic = true
                             }
@@ -1845,9 +2027,51 @@ class MainActivity : ComponentActivity() {
                 Text(
                     text = label,
                     kind = CouiTextKind.SectionTitle,
-                    color = if (busy) colors.disabled else colors.accent,
+                    color = when {
+                        busy -> colors.disabled
+                        isWarning -> Color(0xFFD32F2F)
+                        else -> colors.accent
+                    },
                     textAlign = TextAlign.Start
                 )
+            }
+        }
+    }
+
+    @Composable
+    private fun SoftRebootCard() {
+        val colors = CouiPageDefaults.themeColors()
+        Group {
+            Item(
+                onClick = { softRebootDialogVisible = true },
+                enabled = !busy && !softRebooting,
+                trailing = { Chevron() }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AppIcon(
+                        icon = Icons.Filled.RestartAlt,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = colors.accent
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (softRebooting) AppStrings.actionRunning(appLanguage) else AppStrings.softRebootNow(appLanguage),
+                            kind = CouiTextKind.SectionTitle,
+                            color = colors.title
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = AppStrings.softRebootNowSummary(appLanguage),
+                            kind = CouiTextKind.PreferenceSummary,
+                            color = colors.summary
+                        )
+                    }
+                }
             }
         }
     }
@@ -2170,6 +2394,15 @@ class MainActivity : ComponentActivity() {
                         enabled = !syncingProfiles,
                         trailing = { Chevron() }
                     )
+                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingItem(
+                        icon = Icons.Filled.Memory,
+                        title = if (parsingBoot) AppStrings.parsingBootTitle(appLanguage) else AppStrings.parseBootImage(appLanguage),
+                        summary = AppStrings.parseBootImageSummary(appLanguage),
+                        onClick = { launchBootPicker() },
+                        enabled = !parsingBoot,
+                        trailing = { Chevron() }
+                    )
                 }
             }
             item {
@@ -2232,6 +2465,100 @@ class MainActivity : ComponentActivity() {
             }.onFailure {
                 Toast.makeText(this@MainActivity, AppStrings.syncProfilesFailed(appLanguage), Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun launchBootPicker() {
+        runCatching {
+            bootPickerLauncher.launch(arrayOf("*/*"))
+        }.onFailure {
+            Toast.makeText(this, "Cannot open file picker: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun parseBootUri(uri: Uri) {
+        if (parsingBoot) return
+        parsingBoot = true
+        addLog("[boot-parser] Analyzing file from $uri...")
+        lifecycleScope.launch {
+            val res = BootSymbolParser.parseFromUri(applicationContext, uri)
+            parsingBoot = false
+            when (res) {
+                is ParseResult.Success -> {
+                    DynamicProfileManager.addProfile(applicationContext, res.profile)
+                    dynamicProfileCount = DynamicProfileManager.profileCount()
+                    val newKind = JailbreakCore.kindFor(kernelVersion)?.let {
+                        runCatching { ExploitKind.valueOf(it) }.getOrNull()
+                    } ?: ExploitKind.UNSUPPORTED
+                    exploit = newKind
+                    parseResultDialog = res
+                    addLog("[boot-parser] Success: ${res.banner} (${res.symbolsCount} symbols recovered)")
+                    Toast.makeText(this@MainActivity, AppStrings.parseBootSuccess(res.banner, res.symbolsCount, appLanguage), Toast.LENGTH_LONG).show()
+                }
+                is ParseResult.Error -> {
+                    parseResultDialog = res
+                    addLog("[boot-parser] Error: ${res.message}")
+                    Toast.makeText(this@MainActivity, AppStrings.parseBootFailed(res.message, appLanguage), Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun performSoftReboot() {
+        if (softRebooting) return
+        softRebooting = true
+        addLog("[soft-reboot] Initiating framework restart (Zygote)...")
+        lifecycleScope.launch(Dispatchers.IO) {
+            val cmd = "setprop ctl.restart zygote || setprop ctl.restart zygote_secondary || killall -9 zygote zygote64"
+            val res = runRootCommand(cmd, 5)
+            if (res.first != 0) {
+                val fallback = runCatching {
+                    PrivService.newProcess(
+                        arrayOf("su", "-c", cmd),
+                        shizukuEnv(), "/"
+                    ).waitFor()
+                }.getOrDefault(-1)
+                if (fallback != 0) {
+                    withContext(Dispatchers.Main) {
+                        softRebooting = false
+                        addLog("[soft-reboot] Failed to restart zygote: rc=$fallback")
+                        Toast.makeText(this@MainActivity, "Soft reboot failed", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+            }
+            withContext(Dispatchers.Main) {
+                softRebooting = false
+                addLog("[soft-reboot] Framework restarted. Modules applied without losing jailbreak.")
+            }
+        }
+    }
+
+    private fun getBootId(): String {
+        return runCatching {
+            val f = File("/proc/sys/kernel/random/boot_id")
+            if (f.exists() && f.canRead()) f.readText().trim() else null
+        }.getOrNull() ?: run {
+            val bootSec = (System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime()) / 1000
+            "boot_$bootSec"
+        }
+    }
+
+    private fun runDoneThisBoot(): Boolean {
+        if (bootSessionRan) return true
+        val lastBootId = getSharedPreferences("pyb110", MODE_PRIVATE).getString("last_run_boot_id", null)
+        val ran = lastBootId != null && lastBootId == getBootId()
+        if (ran) bootSessionRan = true
+        return ran
+    }
+
+    private fun markRunThisBoot() {
+        getSharedPreferences("pyb110", MODE_PRIVATE)
+            .edit()
+            .putString("last_run_boot_id", getBootId())
+            .apply()
+        lifecycleScope.launch(Dispatchers.Main) {
+            bootSessionRan = true
         }
     }
 
@@ -2473,6 +2800,15 @@ class MainActivity : ComponentActivity() {
                         summary = "${AppStrings.syncProfilesSummary(appLanguage)} (${dynamicProfileCount} active)",
                         onClick = { syncProfilesOnline() },
                         enabled = !syncingProfiles,
+                        trailing = { Chevron() }
+                    )
+                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingItem(
+                        icon = Icons.Filled.Memory,
+                        title = if (parsingBoot) AppStrings.parsingBootTitle(appLanguage) else AppStrings.parseBootImage(appLanguage),
+                        summary = AppStrings.parseBootImageSummary(appLanguage),
+                        onClick = { launchBootPicker() },
+                        enabled = !parsingBoot,
                         trailing = { Chevron() }
                     )
                 }
@@ -4022,6 +4358,7 @@ class MainActivity : ComponentActivity() {
                     ksuActive = active
                     selinuxText = se
                 }
+                markRunThisBoot()
                 addLog(if (active) "KernelSU module loaded" else "KernelSU module not loaded")
                 if (rc == 0 && active && !softReboot) {
                     withContext(Dispatchers.Main) { launchManager() }

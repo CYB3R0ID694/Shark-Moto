@@ -10,7 +10,7 @@ val keystoreProps = Properties().apply {
  * table stay in the tree, but the shipped APK can drop those devices and
  * the vivo-only native payloads.  Build the full package with
  * -PsharkVivo=true. */
-val vivoIqoo = (findProperty("sharkVivo") ?: "false").toString().toBoolean()
+val vivoIqoo = (findProperty("sharkVivo") ?: "true").toString().toBoolean()
 /* vivo's 6.18.21 (PD2606) chain can also be dropped on its own; build the
  * "full minus PD2606" package with -PsharkVivo=true -PsharkVivo61821=false. */
 val vivo61821 = (findProperty("sharkVivo61821") ?: "true").toString().toBoolean()

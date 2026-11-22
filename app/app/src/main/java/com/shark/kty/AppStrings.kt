@@ -1129,4 +1129,88 @@ object AppStrings {
         AppLanguage.PT -> "Falha ao sincronizar perfis, verifique a conexão"
         else -> "Failed to sync profiles, check network"
     }
+
+    fun parseBootImage(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "从 boot.img 解析内核符号"
+        AppLanguage.RU -> "Анализ boot.img / символов ядра"
+        AppLanguage.PT -> "Extrair Símbolos do boot.img"
+        else -> "Parse boot.img / Kernel Symbols"
+    }
+
+    fun parseBootImageSummary(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "从本地 boot.img / kernel.bin 自动提取符号并适配"
+        AppLanguage.RU -> "Извлечь символы и адреса из локального boot.img / kernel.bin"
+        AppLanguage.PT -> "Extrair símbolos e offsets do boot.img / kernel.bin local"
+        else -> "Extract symbols & offsets from local boot.img / kernel.bin"
+    }
+
+    fun parsingBootTitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "正在解析内核映像..."
+        AppLanguage.RU -> "Анализ образа ядра..."
+        AppLanguage.PT -> "Analisando imagem do kernel..."
+        else -> "Parsing kernel image..."
+    }
+
+    fun parseBootSuccess(kernel: String, symbols: Int, lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "成功提取 $symbols 个内核符号并生成配置！"
+        AppLanguage.RU -> "Успешно извлечено $symbols символов ядра!"
+        AppLanguage.PT -> "$symbols símbolos do kernel extraídos com sucesso!"
+        else -> "Successfully extracted $symbols symbols and added profile!"
+    }
+
+    fun parseBootFailed(error: String, lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "解析失败: $error"
+        AppLanguage.RU -> "Ошибка анализа: $error"
+        AppLanguage.PT -> "Falha na análise: $error"
+        else -> "Parse failed: $error"
+    }
+
+    fun softRebootNow(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "软重启 (应用模块)"
+        AppLanguage.RU -> "Мягкая перезагрузка (применить модули)"
+        AppLanguage.PT -> "Reinicialização Suave (Aplicar Módulos)"
+        else -> "Soft Reboot (Apply Modules)"
+    }
+
+    fun softRebootNowSummary(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "重启系统框架 (Zygote) 使模块生效，无需重启设备且保留 ROOT"
+        AppLanguage.RU -> "Перезапустить Android framework (Zygote) для активации модулей без потери root"
+        AppLanguage.PT -> "Reinicia a framework do Android (Zygote) para ativar módulos mantendo o root"
+        else -> "Restart Android framework (Zygote) to activate modules without dropping root"
+    }
+
+    fun confirmSoftReboot(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "重启框架"
+        AppLanguage.RU -> "Перезапустить"
+        AppLanguage.PT -> "Reiniciar"
+        else -> "Restart Framework"
+    }
+
+    fun softRebootExplanation(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "此操作将重启系统服务和 Zygote 框架，以便新加载的 KernelSU / Zygisk 模块对应用生效。系统内核不会重启，因此临时 Root 权限将完整保留。"
+        AppLanguage.RU -> "Это перезапустит system server и Zygote, чтобы модули KernelSU / Zygisk активировались. Ядро устройства не перезагрузится, поэтому root сохранится."
+        AppLanguage.PT -> "Isso reinicia o system server e o Zygote para que os módulos do KernelSU / Zygisk entrem em vigor. O kernel não será reiniciado, mantendo o root ativo."
+        else -> "This restarts the system server and Zygote framework so newly loaded KernelSU / Zygisk modules hook newly started apps. The kernel will NOT reboot, so temporary jailbreak stays live."
+    }
+
+    fun rebootRequiredAlreadyRan(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "需重启设备 (此启动周期已运行)"
+        AppLanguage.RU -> "Требуется перезагрузка (уже запускалось)"
+        AppLanguage.PT -> "Reinicialização necessária (já executado)"
+        else -> "Reboot Required (Already ran this boot)"
+    }
+
+    fun rerunBlockedTitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "需要重启设备"
+        AppLanguage.RU -> "Требуется перезагрузка"
+        AppLanguage.PT -> "Reinicialização Necessária"
+        else -> "Reboot Required"
+    }
+
+    fun rerunBlockedMessage(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "内核利用在此启动周期中只能安全执行一次。在已修改的内核状态上重复运行可能导致内核崩溃或设备重启。\n\n如需再次运行，请重启您的设备。"
+        AppLanguage.RU -> "Операция может выполняться только один раз за сеанс загрузки. Повторный запуск на уже измененном ядре может привести к сбою устройства.\n\nПожалуйста, перезагрузите устройство для повторной попытки."
+        AppLanguage.PT -> "A operação só pode ser executada com segurança uma vez por inicialização. Executar novamente em um estado de kernel modificado pode causar falha do dispositivo.\n\nPor favor, reinicie o dispositivo para tentar novamente."
+        else -> "This operation can only be safely executed once per boot session. Running again on an already modified kernel state may cause a device crash or reboot.\n\nPlease reboot your device to run again."
+    }
 }
