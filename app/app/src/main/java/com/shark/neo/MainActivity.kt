@@ -1,4 +1,4 @@
-package com.shark.kty
+package com.shark.neo
 
 import android.Manifest
 import android.app.AlertDialog

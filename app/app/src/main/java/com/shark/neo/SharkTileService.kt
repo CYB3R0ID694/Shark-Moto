@@ -1,4 +1,4 @@
-package com.shark.kty
+package com.shark.neo
 
 import android.app.PendingIntent
 import android.content.Intent

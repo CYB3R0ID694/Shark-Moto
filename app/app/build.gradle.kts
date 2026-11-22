@@ -26,7 +26,7 @@ plugins {
 }
 
 android {
-    namespace = "com.shark.kty"
+    namespace = "com.shark.neo"
     compileSdk {
         version = release(37) {
             minorApiLevel = 0
@@ -37,8 +37,8 @@ android {
         applicationId = "com.shark.neo"
         minSdk = 33
         targetSdk = 37
-        versionCode = 105
-        versionName = "2.5.3"
+        versionCode = 106
+        versionName = "2.5.4-Test"
         ndk {
             abiFilters.add("arm64-v8a")
         }

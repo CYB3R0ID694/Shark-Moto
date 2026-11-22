@@ -1,4 +1,4 @@
-package com.shark.kty
+package com.shark.neo
 
 enum class AppLanguage(val code: String, val title: String, val nativeName: String) {
     EN("en", "English", "English"),

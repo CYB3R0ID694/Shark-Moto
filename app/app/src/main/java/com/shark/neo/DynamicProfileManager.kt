@@ -1,4 +1,4 @@
-package com.shark.kty
+package com.shark.neo
 
 import android.content.Context
 import android.util.Log
