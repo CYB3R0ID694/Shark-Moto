@@ -1131,17 +1131,17 @@ object AppStrings {
     }
 
     fun parseBootImage(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "从 boot.img 解析内核符号"
-        AppLanguage.RU -> "Анализ boot.img / символов ядра"
-        AppLanguage.PT -> "Extrair Símbolos do boot.img"
-        else -> "Parse boot.img / Kernel Symbols"
+        AppLanguage.ZH -> "导入内核配置 (.conf / boot.img / OTA)"
+        AppLanguage.RU -> "Импорт профиля (.conf / boot.img / OTA)"
+        AppLanguage.PT -> "Importar Perfil (.conf / boot.img / OTA)"
+        else -> "Import Profile (.conf / boot.img / OTA)"
     }
 
     fun parseBootImageSummary(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "从本地 boot.img / kernel.bin 自动提取符号并适配"
-        AppLanguage.RU -> "Извлечь символы и адреса из локального boot.img / kernel.bin"
-        AppLanguage.PT -> "Extrair símbolos e offsets do boot.img / kernel.bin local"
-        else -> "Extract symbols & offsets from local boot.img / kernel.bin"
+        AppLanguage.ZH -> "导入 GhostLock .conf 配置或从本地 boot.img / OTA 提取符号"
+        AppLanguage.RU -> "Импорт профиля GhostLock .conf или извлечение из boot.img / OTA"
+        AppLanguage.PT -> "Importar perfil GhostLock .conf ou extrair do boot.img / OTA"
+        else -> "Import GhostLock .conf profile or extract symbols from boot.img / OTA"
     }
 
     fun parsingBootTitle(lang: AppLanguage): String = when (lang) {
@@ -1268,5 +1268,121 @@ object AppStrings {
         AppLanguage.RU -> "Поделиться профилем в группе"
         AppLanguage.PT -> "Share Profile to Support Group"
         else -> "Share Profile to Support Group"
+    }
+
+    // OTA Freeze / Block System Updates
+    fun blockOtaUpdatesTitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "阻止系统更新 (冻结OTA)"
+        AppLanguage.RU -> "Блокировать обновления (Заморозить OTA)"
+        AppLanguage.PT -> "Bloquear Atualizações (Congelar OTA)"
+        else -> "Block System Updates (Freeze OTA)"
+    }
+
+    fun blockOtaUpdatesSummary(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "禁用系统更新组件，防止系统自动更新修复此漏洞"
+        AppLanguage.RU -> "Отключить службы OTA, чтобы обновления не закрыли уязвимость"
+        AppLanguage.PT -> "Desativar serviços OTA para evitar que atualizações corrijam o exploit"
+        else -> "Disable OTA services to prevent firmware updates from patching the exploit"
+    }
+
+    fun blockOtaSuccess(count: Int, lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "已禁用 $count 个系统更新服务，OTA已冻结"
+        AppLanguage.RU -> "Отключено служб OTA: $count. Обновления заблокированы."
+        AppLanguage.PT -> "Serviços OTA desativados: $count. Atualizações bloqueadas."
+        else -> "Blocked $count OTA update services. Firmware updates frozen."
+    }
+
+    fun unblockOtaSuccess(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "已恢复系统更新服务"
+        AppLanguage.RU -> "Службы обновлений восстановлены"
+        AppLanguage.PT -> "Serviços de atualização restaurados"
+        else -> "Restored system update services"
+    }
+
+    // Security Patch Preflight & Warnings
+    fun patchLevelWarningTitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "安全补丁警告 (2026年11月+)"
+        AppLanguage.RU -> "Внимание: патч безопасности (Ноябрь 2026+)"
+        AppLanguage.PT -> "Aviso de Patch de Segurança (Nov 2026+)"
+        else -> "Security Patch Warning (Nov 2026+)"
+    }
+
+    fun patchLevelWarningMessage(patchDate: String, lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "检测到您的设备安全补丁为 $patchDate。\n\nGoogle 与厂商已在 2026年11月 补丁中修复了 CVE-2026-98260 内核漏洞。在此固件上运行利用程序可能会失败或导致设备崩溃。\n\n如果您正在进行安全测试或已冻结特定组件，可以选择继续尝试。"
+        AppLanguage.RU -> "Уровень патча безопасности вашего устройства: $patchDate.\n\nGoogle и производители закрыли уязвимость CVE-2026-98260 в патче от ноября 2026 года. Попытка запуска эксплойта на этой прошивке скорее всего завершится ошибкой или перезагрузкой.\n\nВы можете продолжить, если выполняете тестирование."
+        AppLanguage.PT -> "O nível de patch de segurança do seu dispositivo é $patchDate.\n\nA Google e os fabricantes corrigiram a vulnerabilidade CVE-2026-98260 a partir do patch de novembro de 2026. A execução do exploit nesta versão provavelmente falhará ou causará instabilidade.\n\nVocê pode continuar se estiver realizando testes."
+        else -> "Your device security patch level is $patchDate.\n\nGoogle and OEMs patched the CVE-2026-98260 kernel vulnerability starting in the November 2026 security bulletin. Running the exploit on this firmware will likely fail or cause a reboot.\n\nYou may proceed if you are testing or debugging."
+    }
+
+    fun patchLevelBannerTitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "固件补丁提示 (利用可能已被修复)"
+        AppLanguage.RU -> "Патч безопасности (Уязвимость может быть закрыта)"
+        AppLanguage.PT -> "Aviso de Patch (Exploit pode estar corrigido)"
+        else -> "Firmware Notice (Exploit May Be Patched)"
+    }
+
+    fun patchLevelBannerSummary(patchDate: String, lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "补丁级别: $patchDate (点击查看说明)"
+        AppLanguage.RU -> "Патч: $patchDate (нажмите для подробностей)"
+        AppLanguage.PT -> "Patch: $patchDate (toque para detalhes)"
+        else -> "Patch Level: $patchDate (tap for details)"
+    }
+
+    // Extras Categories
+    fun extrasSectionJailbreak(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "越狱与系统防护"
+        AppLanguage.RU -> "Джейлбрейк и защита"
+        AppLanguage.PT -> "Jailbreak e Proteção"
+        else -> "Jailbreak & System Guard"
+    }
+
+    fun extrasSectionManagers(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "Root 管理器与模块"
+        AppLanguage.RU -> "Менеджеры Root и модули"
+        AppLanguage.PT -> "Gerenciadores Root e Módulos"
+        else -> "Root Managers & Modules"
+    }
+
+    fun extrasSectionDiagnostics(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "系统诊断与工具"
+        AppLanguage.RU -> "Диагностика и инструменты"
+        AppLanguage.PT -> "Diagnóstico e Ferramentas"
+        else -> "Diagnostics & System Tools"
+    }
+
+    fun extrasSectionProfiles(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "动态配置与更新"
+        AppLanguage.RU -> "Динамические профили и обновления"
+        AppLanguage.PT -> "Perfis Dinâmicos e Atualizações"
+        else -> "Dynamic Profiles & Updates"
+    }
+
+    // GhostLock Remote Repo Sync
+    fun syncGhostLockTitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "同步 GhostLock 仓库配置 (.conf)"
+        AppLanguage.RU -> "Синхронизация GhostLock (.conf)"
+        AppLanguage.PT -> "Sincronizar GhostLock (.conf)"
+        else -> "Sync GhostLock .conf Profiles"
+    }
+
+    fun syncGhostLockSummary(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "从 YuKongA/ghostlock-app 仓库在线获取最新 .conf 配置文件"
+        AppLanguage.RU -> "Загрузить свежие .conf профили из репозитория YuKongA/ghostlock-app"
+        AppLanguage.PT -> "Baixar perfis .conf recentes do repositório YuKongA/ghostlock-app"
+        else -> "Fetch latest .conf profiles from YuKongA/ghostlock-app repository"
+    }
+
+    fun syncGhostLockSuccess(count: Int, lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "已从 GhostLock 仓库导入 $count 个配置文件"
+        AppLanguage.RU -> "Импортировано $count профилей из репозитория GhostLock"
+        AppLanguage.PT -> "Importados $count perfis do repositório GhostLock"
+        else -> "Imported $count profiles from GhostLock repository"
+    }
+
+    fun syncGhostLockMatched(count: Int, model: String, lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "同步 $count 个配置！成功匹配本机: $model"
+        AppLanguage.RU -> "Импортировано: $count. Найдено совпадение для устройства: $model"
+        AppLanguage.PT -> "Importados: $count. Dispositivo correspondente: $model"
+        else -> "Imported $count profiles! Matched active device: $model"
     }
 }

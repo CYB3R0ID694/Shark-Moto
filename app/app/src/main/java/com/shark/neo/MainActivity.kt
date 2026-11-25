@@ -72,6 +72,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -100,6 +101,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tune
@@ -307,6 +309,7 @@ class MainActivity : ComponentActivity() {
     private var diagnosticOutput by mutableStateOf("")
     private var betaChannel by mutableStateOf(false)
     private var syncingProfiles by mutableStateOf(false)
+    private var syncingGhostLock by mutableStateOf(false)
     private var dynamicProfileCount by mutableStateOf(0)
     private var parsingBoot by mutableStateOf(false)
     private var parseResultDialog by mutableStateOf<ParseResult?>(null)
@@ -317,6 +320,9 @@ class MainActivity : ComponentActivity() {
     private var bootSessionRan by mutableStateOf(false)
     private var bypassRebootGuard by mutableStateOf(false)
     private var uploadingReport by mutableStateOf(false)
+    private var blockOtaUpdates by mutableStateOf(false)
+    private var patchLevelDialogVisible by mutableStateOf(false)
+    private var patchWarningDismissed by mutableStateOf(false)
 
     private val bootPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -542,7 +548,14 @@ class MainActivity : ComponentActivity() {
         dynamicSwitching = manager == ManagerKind.DYNAMIC
         hotManager = if (dynamicSwitching) ManagerKind.KERNELSU else manager
         customSpoofedPkg = prefs.getString("custom_spoofed_pkg", "") ?: ""
-        deviceModel = resolveDeviceName()
+        blockOtaUpdates = prefs.getBoolean("block_ota_updates", false)
+        deviceModel = DeviceNameResolver.getCachedOrLocalDeviceName(this)
+        lifecycleScope.launch(Dispatchers.IO) {
+            val market = DeviceNameResolver.resolveDeviceNameOnline(applicationContext)
+            withContext(Dispatchers.Main) {
+                deviceModel = market
+            }
+        }
         refreshStaticStateAsync()
         refreshKsuAsync()
         setContent {
@@ -1085,6 +1098,45 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
+    private fun PatchLevelWarningDialog() {
+        if (!patchLevelDialogVisible) return
+        val scheme = CouiTheme.colorScheme
+        val accent = scheme.accent
+
+        Dialog(
+            onDismissRequest = { patchLevelDialogVisible = false },
+            title = AppStrings.patchLevelWarningTitle(appLanguage),
+            confirmAction = CouiDialogAction(
+                text = AppStrings.actionRunAnyway(appLanguage),
+                onClick = {
+                    patchLevelDialogVisible = false
+                    patchWarningDismissed = true
+                    runFlow()
+                },
+                style = CouiDialogActionStyle.Primary,
+                colors = CouiDialogDefaults.primaryActionColors(accent)
+            ),
+            dismissAction = CouiDialogAction(
+                text = AppStrings.close(appLanguage),
+                onClick = { patchLevelDialogVisible = false }
+            ),
+            visible = true
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CouiDialogDefaults.contentPadding)
+            ) {
+                Text(
+                    text = AppStrings.patchLevelWarningMessage(Build.VERSION.SECURITY_PATCH, appLanguage),
+                    kind = CouiTextKind.Description,
+                    color = scheme.onSurface
+                )
+            }
+        }
+    }
+
+    @Composable
     private fun AppRoot() {
         if (!languageChosen) {
             LanguageGate(onAccept = { chosen ->
@@ -1226,6 +1278,7 @@ class MainActivity : ComponentActivity() {
         ParseResultDialog()
         SoftRebootConfirmDialog()
         RerunBlockedDialog()
+        PatchLevelWarningDialog()
     }
 
     @Composable
@@ -1906,6 +1959,10 @@ class MainActivity : ComponentActivity() {
                 item {
                     UnsupportedKernelBanner(onClick = { showDiagnostic = true })
                 }
+            } else if (JailbreakCore.isSecurityPatchPatched(engineKind = exploit.name)) {
+                item {
+                    PatchedFirmwareBanner(onClick = { patchLevelDialogVisible = true })
+                }
             }
             item {
                 PrimaryActionCard()
@@ -1926,6 +1983,47 @@ class MainActivity : ComponentActivity() {
                     fingerprint = Build.FINGERPRINT,
                     selinux = selinuxText
                 )
+            }
+        }
+    }
+
+    @Composable
+    private fun PatchedFirmwareBanner(onClick: () -> Unit) {
+        val dark = CouiTheme.isDark
+        val colors = CouiPageDefaults.themeColors(dark)
+        val amberBg = if (dark) Color(0xFF332500) else Color(0xFFFFF8E1)
+        val amberTint = Color(0xFFFFB300)
+
+        Group(colors = colors.copy(card = amberBg)) {
+            Item(
+                onClick = onClick,
+                trailing = { Chevron() }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AppIcon(
+                        icon = Icons.Filled.Shield,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = amberTint
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = AppStrings.patchLevelBannerTitle(appLanguage),
+                            kind = CouiTextKind.SectionTitle,
+                            color = colors.title
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = AppStrings.patchLevelBannerSummary(Build.VERSION.SECURITY_PATCH, appLanguage),
+                            kind = CouiTextKind.PreferenceSummary,
+                            color = colors.summary
+                        )
+                    }
+                }
             }
         }
     }
@@ -2114,6 +2212,10 @@ class MainActivity : ComponentActivity() {
                             exploit == ExploitKind.UNSUPPORTED -> {
                                 showDiagnostic = true
                             }
+                            JailbreakCore.isSecurityPatchPatched(engineKind = exploit.name) && !patchWarningDismissed -> {
+                                addLog("[preflight] Device security patch is ${Build.VERSION.SECURITY_PATCH} (>= Nov 2026 threshold)")
+                                patchLevelDialogVisible = true
+                            }
                             else -> runFlow()
                         }
                     }
@@ -2262,12 +2364,23 @@ class MainActivity : ComponentActivity() {
         selinux: String
     ) {
         val colors = CouiPageDefaults.themeColors()
+        val activeProfile = DynamicProfileManager.lookup(kernelVersion)
         Group {
             SettingItem(Icons.Filled.DeveloperBoard, AppStrings.kernelVersion(appLanguage), summary = kernelVersion)
             Divider(startIndent = itemDividerIndent(), color = colors.divider)
-            SettingItem(Icons.Filled.BugReport, AppStrings.exploitMethod(appLanguage), summary = exploitLabel)
+            SettingItem(
+                Icons.Filled.BugReport,
+                AppStrings.exploitMethod(appLanguage),
+                summary = if (activeProfile != null) "$exploitLabel • ${activeProfile.model}" else exploitLabel
+            )
             Divider(startIndent = itemDividerIndent(), color = colors.divider)
-            SettingItem(Icons.Filled.Smartphone, AppStrings.deviceModel(appLanguage), summary = deviceModel)
+            SettingItem(
+                Icons.Filled.Smartphone,
+                AppStrings.deviceModel(appLanguage),
+                summary = if (activeProfile != null && !deviceModel.contains(activeProfile.model.substringBefore(" ("))) {
+                    "$deviceModel [${activeProfile.model}]"
+                } else deviceModel
+            )
             Divider(startIndent = itemDividerIndent(), color = colors.divider)
             SettingItem(Icons.Filled.Fingerprint, AppStrings.buildFingerprint(appLanguage), summary = fingerprint)
             Divider(startIndent = itemDividerIndent(), color = colors.divider)
@@ -2300,36 +2413,50 @@ class MainActivity : ComponentActivity() {
                 bottom = inner.calculateBottomPadding() + 16.dp
             )
         ) {
-            item {
-                Group {
-                    if (exploit != ExploitKind.UNSUPPORTED) {
+            // Category 1: Jailbreak & System Guard
+            if (exploit != ExploitKind.UNSUPPORTED) {
+                item {
+                    SectionLabel(AppStrings.extrasSectionJailbreak(appLanguage))
+                    Group {
+                        SettingSwitchItem(
+                            icon = Icons.Filled.PowerSettingsNew,
+                            title = AppStrings.autoJailbreak(appLanguage),
+                            checked = autoJailbreak,
+                            onCheckedChange = { updateAutoJailbreak(it) }
+                        )
+                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        SettingSwitchItem(
+                            icon = Icons.Filled.Block,
+                            title = AppStrings.blockOtaUpdatesTitle(appLanguage),
+                            summary = AppStrings.blockOtaUpdatesSummary(appLanguage),
+                            checked = blockOtaUpdates,
+                            onCheckedChange = { checked ->
+                                blockOtaUpdates = checked
+                                getSharedPreferences("pyb110", MODE_PRIVATE).edit().putBoolean("block_ota_updates", checked).apply()
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    val (success, total) = JailbreakCore.setBlockOtaUpdates(checked) { cmd -> runRootCommand(cmd, 5) }
+                                    withContext(Dispatchers.Main) {
+                                        if (checked) {
+                                            val msg = AppStrings.blockOtaSuccess(success, appLanguage)
+                                            addLog("[ota-blocker] $msg ($success/$total components disabled)")
+                                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            val msg = AppStrings.unblockOtaSuccess(appLanguage)
+                                            addLog("[ota-blocker] $msg")
+                                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                        )
                         if (!hidesOplusOnlyOptions()) {
+                            Divider(startIndent = itemDividerIndent(), color = colors.divider)
                             SettingSwitchItem(
                                 icon = Icons.Filled.NotificationsOff,
                                 title = AppStrings.disableSecurityAlerts(appLanguage),
                                 checked = antiRootGuard,
                                 onCheckedChange = { updateAntiRootGuard(it) }
                             )
-                            Divider(startIndent = itemDividerIndent(), color = colors.divider)
-                        }
-                        SettingSwitchItem(
-                            icon = Icons.Filled.RestartAlt,
-                            title = AppStrings.softRebootAfterRoot(appLanguage),
-                            checked = softRebootAfter,
-                            onCheckedChange = { updateSoftRebootAfter(it) }
-                        )
-                        if (softRebootAfter) {
-                            Divider(startIndent = itemDividerIndent(), color = colors.divider)
-                            DropdownItem(
-                                icon = Icons.Filled.Schedule,
-                                title = AppStrings.softRebootDelay(appLanguage),
-                                values = softRebootDelays,
-                                selected = softRebootDelayMin,
-                                label = { softRebootDelayLabel(it) },
-                                onSelect = { updateSoftRebootDelay(it) }
-                            )
-                        }
-                        if (!hidesOplusOnlyOptions()) {
                             Divider(startIndent = itemDividerIndent(), color = colors.divider)
                             SettingSwitchItem(
                                 icon = Icons.Filled.RemoveModerator,
@@ -2338,6 +2465,14 @@ class MainActivity : ComponentActivity() {
                                 onCheckedChange = { updateUnloadGuard(it) }
                             )
                         }
+                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        SettingSwitchItem(
+                            icon = Icons.Filled.Refresh,
+                            title = AppStrings.bypassRebootGuardTitle(appLanguage),
+                            summary = AppStrings.bypassRebootGuardSummary(appLanguage),
+                            checked = bypassRebootGuard,
+                            onCheckedChange = { updateBypassRebootGuard(it) }
+                        )
                         if (supportsChaseRetry()) {
                             Divider(startIndent = itemDividerIndent(), color = colors.divider)
                             SettingSwitchItem(
@@ -2347,42 +2482,15 @@ class MainActivity : ComponentActivity() {
                                 onCheckedChange = { updateChaseRetry(it) }
                             )
                         }
-                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
-                        SettingSwitchItem(
-                            icon = Icons.Filled.PowerSettingsNew,
-                            title = AppStrings.autoJailbreak(appLanguage),
-                            checked = autoJailbreak,
-                            onCheckedChange = { updateAutoJailbreak(it) }
-                        )
-                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
-                        SettingSwitchItem(
-                            icon = Icons.Filled.Refresh,
-                            title = AppStrings.bypassRebootGuardTitle(appLanguage),
-                            summary = AppStrings.bypassRebootGuardSummary(appLanguage),
-                            checked = bypassRebootGuard,
-                            onCheckedChange = { updateBypassRebootGuard(it) }
-                        )
-                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
                     }
-                    if (supportsSusfs()) {
-                        SettingSwitchItem(
-                            icon = Icons.Filled.Extension,
-                            title = AppStrings.susfsSupport(appLanguage),
-                            checked = susfsSupport,
-                            onCheckedChange = { updateSusfsSupport(it) }
-                        )
-                    }
-                    if (exploit == ExploitKind.CVE61821) {
-                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
-                        SettingSwitchItem(
-                            icon = Icons.Filled.AccountTree,
-                            title = AppStrings.vfsSupport(appLanguage),
-                            checked = vfsSupport,
-                            onCheckedChange = { updateVfsSupport(it) }
-                        )
-                    }
+                }
+            }
+
+            // Category 2: Root Managers & Modules
+            item {
+                SectionLabel(AppStrings.extrasSectionManagers(appLanguage))
+                Group {
                     if (supportsUniversal() && universalLoaded) {
-                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
                         DropdownItem(
                             icon = Icons.Filled.SwapHoriz,
                             title = AppStrings.hotSwitchManager(appLanguage),
@@ -2393,8 +2501,8 @@ class MainActivity : ComponentActivity() {
                             hotManager = target
                             switchHotManager(target)
                         }
+                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
                     }
-                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
                     SettingItem(
                         icon = Icons.Filled.Security,
                         title = AppStrings.spoofedManager(appLanguage),
@@ -2425,38 +2533,31 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
-                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
-                    SettingSwitchItem(
-                        icon = Icons.Filled.Security,
-                        title = AppStrings.selinuxMode(appLanguage),
-                        summary = if (selinuxPermissive) "Permissive" else "Enforcing",
-                        checked = selinuxPermissive,
-                        onCheckedChange = { checked ->
-                            lifecycleScope.launch {
-                                val (rc, _) = withContext(Dispatchers.IO) {
-                                    JailbreakCore.setSELinuxMode(!checked) { cmd -> runRootCommand(cmd, 5) }
-                                }
-                                if (rc == 0) {
-                                    selinuxPermissive = checked
-                                    selinuxText = if (checked) "Permissive" else "Enforcing"
-                                    val modeName = if (checked) "Permissive" else "Enforcing"
-                                    Toast.makeText(this@MainActivity, AppStrings.selinuxSwitched(modeName, appLanguage), Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                    )
-                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
-                    SettingSwitchItem(
-                        icon = Icons.Filled.DarkMode,
-                        title = AppStrings.amoledMode(appLanguage),
-                        summary = AppStrings.amoledSummary(appLanguage),
-                        checked = amoledBlack,
-                        onCheckedChange = { checked ->
-                            amoledBlack = checked
-                            getSharedPreferences("pyb110", MODE_PRIVATE).edit().putBoolean("amoled_black", checked).apply()
-                        }
-                    )
-                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    if (supportsSusfs()) {
+                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        SettingSwitchItem(
+                            icon = Icons.Filled.Extension,
+                            title = AppStrings.susfsSupport(appLanguage),
+                            checked = susfsSupport,
+                            onCheckedChange = { updateSusfsSupport(it) }
+                        )
+                    }
+                    if (exploit == ExploitKind.CVE61821) {
+                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        SettingSwitchItem(
+                            icon = Icons.Filled.AccountTree,
+                            title = AppStrings.vfsSupport(appLanguage),
+                            checked = vfsSupport,
+                            onCheckedChange = { updateVfsSupport(it) }
+                        )
+                    }
+                }
+            }
+
+            // Category 3: Diagnostics & System Tools
+            item {
+                SectionLabel(AppStrings.extrasSectionDiagnostics(appLanguage))
+                Group {
                     SettingItem(
                         icon = Icons.Filled.BugReport,
                         title = AppStrings.kernelDiagnosticTitle(appLanguage),
@@ -2484,19 +2585,64 @@ class MainActivity : ComponentActivity() {
                     )
                     Divider(startIndent = itemDividerIndent(), color = colors.divider)
                     SettingSwitchItem(
-                        icon = Icons.Filled.Extension,
-                        title = AppStrings.betaChannel(appLanguage),
-                        summary = AppStrings.betaChannelSummary(appLanguage),
-                        checked = betaChannel,
-                        onCheckedChange = { toggleBetaChannel(it) }
+                        icon = Icons.Filled.Security,
+                        title = AppStrings.selinuxMode(appLanguage),
+                        summary = if (selinuxPermissive) "Permissive" else "Enforcing",
+                        checked = selinuxPermissive,
+                        onCheckedChange = { checked ->
+                            lifecycleScope.launch {
+                                val (rc, _) = withContext(Dispatchers.IO) {
+                                    JailbreakCore.setSELinuxMode(!checked) { cmd -> runRootCommand(cmd, 5) }
+                                }
+                                if (rc == 0) {
+                                    selinuxPermissive = checked
+                                    selinuxText = if (checked) "Permissive" else "Enforcing"
+                                    val modeName = if (checked) "Permissive" else "Enforcing"
+                                    Toast.makeText(this@MainActivity, AppStrings.selinuxSwitched(modeName, appLanguage), Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
                     )
                     Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingSwitchItem(
+                        icon = Icons.Filled.RestartAlt,
+                        title = AppStrings.softRebootAfterRoot(appLanguage),
+                        checked = softRebootAfter,
+                        onCheckedChange = { updateSoftRebootAfter(it) }
+                    )
+                    if (softRebootAfter) {
+                        Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                        DropdownItem(
+                            icon = Icons.Filled.Schedule,
+                            title = AppStrings.softRebootDelay(appLanguage),
+                            values = softRebootDelays,
+                            selected = softRebootDelayMin,
+                            label = { softRebootDelayLabel(it) },
+                            onSelect = { updateSoftRebootDelay(it) }
+                        )
+                    }
+                }
+            }
+
+            // Category 4: Dynamic Profiles & Updates
+            item {
+                SectionLabel(AppStrings.extrasSectionProfiles(appLanguage))
+                Group {
                     SettingItem(
                         icon = Icons.Filled.Download,
                         title = if (syncingProfiles) AppStrings.actionRunningDiagnostic(appLanguage) else AppStrings.syncProfiles(appLanguage),
                         summary = "${AppStrings.syncProfilesSummary(appLanguage)} (${dynamicProfileCount} active)",
                         onClick = { syncProfilesOnline() },
-                        enabled = !syncingProfiles,
+                        enabled = !syncingProfiles && !syncingGhostLock,
+                        trailing = { Chevron() }
+                    )
+                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingItem(
+                        icon = Icons.Filled.Refresh,
+                        title = if (syncingGhostLock) AppStrings.actionRunningDiagnostic(appLanguage) else AppStrings.syncGhostLockTitle(appLanguage),
+                        summary = AppStrings.syncGhostLockSummary(appLanguage),
+                        onClick = { syncGhostLockProfilesOnline() },
+                        enabled = !syncingProfiles && !syncingGhostLock,
                         trailing = { Chevron() }
                     )
                     Divider(startIndent = itemDividerIndent(), color = colors.divider)
@@ -2508,8 +2654,28 @@ class MainActivity : ComponentActivity() {
                         enabled = !parsingBoot,
                         trailing = { Chevron() }
                     )
+                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingSwitchItem(
+                        icon = Icons.Filled.Extension,
+                        title = AppStrings.betaChannel(appLanguage),
+                        summary = AppStrings.betaChannelSummary(appLanguage),
+                        checked = betaChannel,
+                        onCheckedChange = { toggleBetaChannel(it) }
+                    )
+                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingSwitchItem(
+                        icon = Icons.Filled.DarkMode,
+                        title = AppStrings.amoledMode(appLanguage),
+                        summary = AppStrings.amoledSummary(appLanguage),
+                        checked = amoledBlack,
+                        onCheckedChange = { checked ->
+                            amoledBlack = checked
+                            getSharedPreferences("pyb110", MODE_PRIVATE).edit().putBoolean("amoled_black", checked).apply()
+                        }
+                    )
                 }
             }
+
             item {
                 hotSwitchError?.let {
                     Text(
@@ -2557,18 +2723,52 @@ class MainActivity : ComponentActivity() {
     private fun syncProfilesOnline() {
         if (syncingProfiles) return
         syncingProfiles = true
+        addLog("[sync] Fetching latest dynamic profiles from Shark repository...")
         lifecycleScope.launch {
             val result = DynamicProfileManager.syncRemote(applicationContext)
+            // Also attempt to check GhostLock repo for matching kernel profile
+            val glMatch = runCatching {
+                GhostLockRepoSync.syncCurrentKernel(applicationContext, kernelVersion).getOrNull()
+            }.getOrNull()
+
             syncingProfiles = false
             result.onSuccess { count ->
-                dynamicProfileCount = count
+                dynamicProfileCount = DynamicProfileManager.profileCount()
                 val newKind = JailbreakCore.kindFor(kernelVersion)?.let {
                     runCatching { ExploitKind.valueOf(it) }.getOrNull()
                 } ?: ExploitKind.UNSUPPORTED
                 exploit = newKind
-                Toast.makeText(this@MainActivity, AppStrings.syncProfilesSuccess(count, appLanguage), Toast.LENGTH_SHORT).show()
+                val glNotice = if (glMatch != null) " (+GhostLock matched for active kernel)" else ""
+                Toast.makeText(this@MainActivity, AppStrings.syncProfilesSuccess(count, appLanguage) + glNotice, Toast.LENGTH_SHORT).show()
             }.onFailure {
                 Toast.makeText(this@MainActivity, AppStrings.syncProfilesFailed(appLanguage), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun syncGhostLockProfilesOnline() {
+        if (syncingGhostLock) return
+        syncingGhostLock = true
+        addLog("[ghostlock-sync] Querying YuKongA/ghostlock-app repository...")
+        lifecycleScope.launch {
+            val result = GhostLockRepoSync.syncAllFromRepo(applicationContext, kernelVersion)
+            syncingGhostLock = false
+            result.onSuccess { summary ->
+                dynamicProfileCount = DynamicProfileManager.profileCount()
+                val newKind = JailbreakCore.kindFor(kernelVersion)?.let {
+                    runCatching { ExploitKind.valueOf(it) }.getOrNull()
+                } ?: exploit
+                exploit = newKind
+                val msg = if (summary.currentDeviceMatched) {
+                    AppStrings.syncGhostLockMatched(summary.totalImported, summary.currentDeviceModel ?: "Device", appLanguage)
+                } else {
+                    AppStrings.syncGhostLockSuccess(summary.totalImported, appLanguage)
+                }
+                addLog("[ghostlock-sync] $msg")
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+            }.onFailure {
+                addLog("[ghostlock-sync] Error: ${it.message}")
+                Toast.makeText(this@MainActivity, AppStrings.syncProfilesFailed(appLanguage) + ": " + it.message, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -2702,8 +2902,10 @@ class MainActivity : ComponentActivity() {
 
     private fun copyDiagnosticReport() {
         val cm = getSystemService(ClipboardManager::class.java)
+        val marketName = DeviceNameResolver.getCachedOrLocalDeviceName(this)
         val fullReport = """
             # Shark-Moto Device Diagnostic Report
+            Market Name: $marketName
             Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})
             Brand: ${Build.BRAND}
             Fingerprint: ${Build.FINGERPRINT}
@@ -2723,7 +2925,8 @@ class MainActivity : ComponentActivity() {
     private fun submitGithubIssue() {
         copyDiagnosticReport()
         val repo = "CYB3R0ID694/Shark-Moto"
-        val title = "[Device Support] ${Build.MANUFACTURER} ${Build.MODEL} ($kernelVersion)"
+        val marketName = DeviceNameResolver.getCachedOrLocalDeviceName(this)
+        val title = "[Device Support] $marketName (${Build.MODEL}) ($kernelVersion)"
         val cleanOutput = diagnosticOutput.take(1200)
         val body = """
             ### Device & Kernel Information
@@ -2774,7 +2977,11 @@ class MainActivity : ComponentActivity() {
         if (uploadingReport) return
         uploadingReport = true
         lifecycleScope.launch {
-            var targetDevice = "${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})"
+            val marketName = DeviceNameResolver.resolveDeviceNameOnline(applicationContext)
+            withContext(Dispatchers.Main) {
+                deviceModel = marketName
+            }
+            var targetDevice = DeviceNameResolver.formatDisplayDevice(marketName)
             var targetBrand = Build.BRAND
             var targetKernel = kernelVersion
             var targetFingerprint = Build.FINGERPRINT
@@ -2798,6 +3005,7 @@ class MainActivity : ComponentActivity() {
 
             val fullReport = """
                 Device: $targetDevice
+                Model: ${Build.MODEL} (${Build.DEVICE})
                 Brand: $targetBrand
                 Fingerprint: $targetFingerprint
                 Kernel: $targetKernel
@@ -2832,6 +3040,10 @@ class MainActivity : ComponentActivity() {
         diagnosticRunning = true
         diagnosticOutput = AppStrings.actionRunningDiagnostic(appLanguage)
         lifecycleScope.launch(Dispatchers.IO) {
+            val marketName = DeviceNameResolver.resolveDeviceNameOnline(applicationContext)
+            withContext(Dispatchers.Main) {
+                deviceModel = marketName
+            }
             val nativeDir = applicationInfo.nativeLibraryDir
             val script = """
                 echo "=== SYSTEM & KERNEL BANNER ==="
@@ -2840,6 +3052,7 @@ class MainActivity : ComponentActivity() {
                 echo "Machine: $(uname -m)"
                 echo ""
                 echo "=== DEVICE BUILD PROPERTIES ==="
+                echo "Market Name: $marketName"
                 echo "Manufacturer: $(getprop ro.product.manufacturer)"
                 echo "Brand: $(getprop ro.product.brand)"
                 echo "Model: $(getprop ro.product.model)"
@@ -2886,9 +3099,12 @@ class MainActivity : ComponentActivity() {
                 elif [ -x "$nativeDir/libk61821p.so" ] && echo "$kernelVersion" | grep -q "6.18.21"; then
                     echo "Executing libk61821p.so probe:"
                     "$nativeDir/libk61821p.so" probe 2>&1
-                elif [ -x "$nativeDir/libk61821x.so" ] && echo "$kernelVersion" | grep -q "6.18.21"; then
+                elif [ -x "$nativeDir/libk61821x.so" ] && echo "$kernelVersion" | grep -q "6.18.21" && echo "$kernelVersion" | grep -q "abogki"; then
                     echo "Executing libk61821x.so probe:"
                     "$nativeDir/libk61821x.so" probe 2>&1
+                elif [ -x "$nativeDir/libk61821.so" ] && echo "$kernelVersion" | grep -q "6.18.21"; then
+                    echo "Executing libk61821.so probe:"
+                    "$nativeDir/libk61821.so" probe 2>&1
                 elif [ -x "$nativeDir/libk61.so" ] && echo "$kernelVersion" | grep -q "6.1\."; then
                     echo "Executing libk61.so probe:"
                     "$nativeDir/libk61.so" probe 2>&1
@@ -3005,7 +3221,16 @@ class MainActivity : ComponentActivity() {
                         title = if (syncingProfiles) AppStrings.actionRunningDiagnostic(appLanguage) else AppStrings.syncProfiles(appLanguage),
                         summary = "${AppStrings.syncProfilesSummary(appLanguage)} (${dynamicProfileCount} active)",
                         onClick = { syncProfilesOnline() },
-                        enabled = !syncingProfiles,
+                        enabled = !syncingProfiles && !syncingGhostLock,
+                        trailing = { Chevron() }
+                    )
+                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingItem(
+                        icon = Icons.Filled.Refresh,
+                        title = if (syncingGhostLock) AppStrings.actionRunningDiagnostic(appLanguage) else AppStrings.syncGhostLockTitle(appLanguage),
+                        summary = AppStrings.syncGhostLockSummary(appLanguage),
+                        onClick = { syncGhostLockProfilesOnline() },
+                        enabled = !syncingProfiles && !syncingGhostLock,
                         trailing = { Chevron() }
                     )
                     Divider(startIndent = itemDividerIndent(), color = colors.divider)
@@ -3143,6 +3368,11 @@ class MainActivity : ComponentActivity() {
                 kernels = listOf("6.12.30-android16-5-g1ed949324a3e-ab13881345-4k")
             ),
             SupportedDeviceEntry(
+                brand = "Redmi / Xiaomi",
+                name = "Redmi Turbo 4 Pro (25053RT47C / onyx)",
+                kernels = listOf("6.6.118-android15-8-g0908354dac1b-ab16143355-4k")
+            ),
+            SupportedDeviceEntry(
                 brand = "OnePlus",
                 name = "OnePlus 16 (PYB110)",
                 kernels = listOf(
@@ -3196,6 +3426,13 @@ class MainActivity : ComponentActivity() {
                 kernels = listOf(
                     "6.6.118-android15-8-g9bc34d5b0c79-abogki537459655-4k",
                     "6.6.118-android15-8-gc4127a25dcf3-ab15863337-4k"
+                )
+            ),
+            SupportedDeviceEntry(
+                brand = "OPPO",
+                name = "OPPO K14 5G (CPH2869)",
+                kernels = listOf(
+                    "6.18.21-android17-5-o-g96f274a16f90-4k"
                 )
             ),
             SupportedDeviceEntry(
@@ -4598,6 +4835,10 @@ class MainActivity : ComponentActivity() {
                     ExploitKind.CVE66127 -> arrayOf("$nativeDir/libk66127.so", "run")
                     ExploitKind.CVE6689 -> arrayOf("$nativeDir/libk6689.so", "run")
                     ExploitKind.CVE61 -> arrayOf("$nativeDir/libk61.so", "run")
+                    ExploitKind.CVE43499_FUTEX -> arrayOf(
+                        JailbreakCore.runnerLib(nativeDir, "CVE43499_FUTEX", kernelVersion) ?: "$nativeDir/libghostlock.so",
+                        "run"
+                    )
                     ExploitKind.UNSUPPORTED -> null
                 } ?: run {
                     withContext(Dispatchers.Main) {
@@ -4609,6 +4850,18 @@ class MainActivity : ComponentActivity() {
                     }
                     return@launch
                 }
+
+                // Verify and log dynamic profile details
+                val activeProfile = DynamicProfileManager.lookup(kernelVersion)
+                if (activeProfile != null) {
+                    addLog("[profile] Active profile: ${activeProfile.model}")
+                    addLog("[profile] Engine: ${activeProfile.engine} | Mask/Route: ${activeProfile.siteMask}")
+                    if (activeProfile.selinuxState != "0x0") addLog("[profile] selinux_state: ${activeProfile.selinuxState}")
+                    if (activeProfile.timerSite != "0x0") addLog("[profile] timer_site: ${activeProfile.timerSite}")
+                } else {
+                    addLog("[profile] Active profile: Built-in GKI/OEM profile for $kernelVersion")
+                }
+
                 val rc = runStreaming(cmd, nativeDir)
                 exit = rc
                 addLog("exploit exit=$rc")
@@ -4687,6 +4940,22 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    override fun onResume() {
+        super.onResume()
+        refreshProfileState()
+    }
+
+    private fun refreshProfileState() {
+        dynamicProfileCount = DynamicProfileManager.profileCount()
+        val newKind = JailbreakCore.kindFor(kernelVersion)?.let {
+            runCatching { ExploitKind.valueOf(it) }.getOrNull()
+        } ?: ExploitKind.UNSUPPORTED
+        if (exploit != newKind) {
+            exploit = newKind
+            addLog("[profile] Active exploit engine updated to ${exploit.fullLabel}")
+        }
+    }
+
     private enum class AppTab(val icon: ImageVector) {
         HOME(Icons.Filled.Home),
         DEVICES(Icons.Filled.Smartphone),
@@ -4714,6 +4983,7 @@ class MainActivity : ComponentActivity() {
         CVE66127("CVE-2026-98260-vivo-6.6.127"),
         CVE6689("CVE-2026-98260-6.6.89"),
         CVE61("CVE-2026-98260-6.1"),
+        CVE43499_FUTEX("CVE-2026-43499-GhostLock"),
         UNSUPPORTED("Unsupported Device")
     }
 
@@ -4780,6 +5050,7 @@ class MainActivity : ComponentActivity() {
     private fun isXiaomiPortKernel(): Boolean =
         kernelVersion == "6.12.69-android16-6-g586bfab1b9c5-abogki536749445-4k" ||
             kernelVersion == "6.18.21-android17-5-g284297031c53-abogki555938958-4k" ||
+            kernelVersion == "6.6.118-android15-8-g0908354dac1b-ab16143355-4k" ||
             exploit == ExploitKind.CVE61230 ||
             Build.MANUFACTURER.equals("xiaomi", ignoreCase = true) ||
             Build.BRAND.equals("poco", ignoreCase = true) ||
