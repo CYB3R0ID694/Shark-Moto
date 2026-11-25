@@ -1385,4 +1385,61 @@ object AppStrings {
         AppLanguage.PT -> "Importados: $count. Dispositivo correspondente: $model"
         else -> "Imported $count profiles! Matched active device: $model"
     }
+
+    // GhostLock Profile Management
+    fun manageGhostLockProfiles(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "管理 GhostLock 配置"
+        AppLanguage.RU -> "Управление профилями GhostLock"
+        AppLanguage.PT -> "Gerenciar Perfis GhostLock"
+        else -> "Manage GhostLock Profiles"
+    }
+
+    fun manageGhostLockProfilesSummary(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "查看已加载配置、检查内核符号与删除管理"
+        AppLanguage.RU -> "Просмотр, проверка символов ядра и удаление профилей"
+        AppLanguage.PT -> "Inspecionar símbolos do kernel e gerenciar/excluir perfis"
+        else -> "Inspect, view symbols, delete or clear synced community profiles"
+    }
+
+    fun profileDetailsTitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "内核配置详情"
+        AppLanguage.RU -> "Сведения о профиле ядра"
+        AppLanguage.PT -> "Detalhes do Perfil do Kernel"
+        else -> "Kernel Profile Details"
+    }
+
+    fun clearAllProfiles(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "清空所有配置"
+        AppLanguage.RU -> "Очистить все профили"
+        AppLanguage.PT -> "Limpar Todos os Perfis"
+        else -> "Clear All Profiles"
+    }
+
+    fun clearAllProfilesConfirm(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "确定要清除所有已同步和导入的社区配置并恢复默认吗？"
+        AppLanguage.RU -> "Вы уверены, что хотите удалить все синхронизированные профили и восстановить значения по умолчанию?"
+        AppLanguage.PT -> "Tem certeza de que deseja limpar todos os perfis sincronizados e restaurar os padrões?"
+        else -> "Are you sure you want to clear all synced community profiles and restore defaults?"
+    }
+
+    fun activeOnThisDevice(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "当前设备匹配"
+        AppLanguage.RU -> "Совпадает с активным ядром"
+        AppLanguage.PT -> "Correspondência com Kernel Ativo"
+        else -> "Matched Active Kernel"
+    }
+
+    fun deleteProfile(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "删除配置"
+        AppLanguage.RU -> "Удалить профиль"
+        AppLanguage.PT -> "Excluir Perfil"
+        else -> "Delete Profile"
+    }
+
+    fun profileDeleted(lang: AppLanguage): String = when (lang) {
+        AppLanguage.ZH -> "配置已删除"
+        AppLanguage.RU -> "Профиль удален"
+        AppLanguage.PT -> "Perfil excluído"
+        else -> "Profile deleted"
+    }
 }

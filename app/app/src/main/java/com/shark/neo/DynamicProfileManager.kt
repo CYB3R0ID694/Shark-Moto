@@ -199,6 +199,29 @@ object DynamicProfileManager {
     fun removeProfile(context: Context, release: String) {
         profiles.remove(release)
         saveProfiles(context)
+        runCatching {
+            val confDir = File(context.filesDir, "kernel_profiles")
+            if (confDir.exists()) {
+                File(confDir, "$release.conf").delete()
+                File(confDir, "${release.replace("/", "_")}.conf").delete()
+            }
+        }
+    }
+
+    fun clearAll(context: Context) {
+        profiles.clear()
+        val local = File(context.filesDir, FILE_NAME)
+        if (local.exists()) local.delete()
+        runCatching {
+            val confDir = File(context.filesDir, "kernel_profiles")
+            if (confDir.exists()) confDir.deleteRecursively()
+        }
+        // Reload bundled stock profiles
+        runCatching {
+            context.assets.open("profiles.json").bufferedReader().use {
+                loadFromJson(it.readText())
+            }
+        }
     }
 
     private fun saveProfiles(context: Context) {
