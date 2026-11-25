@@ -556,9 +556,10 @@ class MainActivity : ComponentActivity() {
         hotManager = if (dynamicSwitching) ManagerKind.KERNELSU else manager
         customSpoofedPkg = prefs.getString("custom_spoofed_pkg", "") ?: ""
         blockOtaUpdates = prefs.getBoolean("block_ota_updates", false)
-        deviceModel = DeviceNameResolver.getCachedOrLocalDeviceName(this)
+        val kVer = kernelVersion
+        deviceModel = DeviceNameResolver.getCachedOrLocalDeviceName(this, kVer)
         lifecycleScope.launch(Dispatchers.IO) {
-            val market = DeviceNameResolver.resolveDeviceNameOnline(applicationContext)
+            val market = DeviceNameResolver.resolveDeviceNameOnline(applicationContext, kVer)
             withContext(Dispatchers.Main) {
                 deviceModel = market
             }
@@ -3480,13 +3481,6 @@ class MainActivity : ComponentActivity() {
                     "6.12.23-android16-5-g41f4cb1fa7c7-abogki465038634-4k",
                     "6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k"
                 )
-            ),
-            SupportedDeviceEntry(
-                brand = "Vivo",
-                name = "Vivo X300 Pro (V2514)",
-                kernels = listOf(
-                    "6.12.58-android16-6-g09eda8c8505a-ab15950084-4k"
-                )
             )
         )
         val knownKernels = staticList.flatMap { it.kernels }.toSet()
@@ -3529,7 +3523,7 @@ class MainActivity : ComponentActivity() {
                 Group {
                     SettingItem(
                         icon = if (isSupported) Icons.Filled.Check else Icons.Filled.Info,
-                        title = "${AppStrings.thisDeviceHeader(appLanguage)}: ${JailbreakCore.resolveDeviceName()}",
+                        title = "${AppStrings.thisDeviceHeader(appLanguage)}: ${JailbreakCore.resolveDeviceName(kernelVersion)}",
                         summary = if (isSupported) {
                             "${AppStrings.thisDeviceStatusSupported(exploit.fullLabel, appLanguage)}\n$kernelVersion"
                         } else {
@@ -4699,7 +4693,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun resolveDeviceName(): String = JailbreakCore.resolveDeviceName()
+    private fun resolveDeviceName(): String = JailbreakCore.resolveDeviceName(kernelVersion)
 
     private fun refreshStaticStateAsync() {
         lifecycleScope.launch(Dispatchers.IO) {

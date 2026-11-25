@@ -218,8 +218,8 @@ object JailbreakCore {
         return null
     }
 
-    fun resolveDeviceName(): String {
-        return DeviceNameResolver.getCachedOrLocalDeviceName()
+    fun resolveDeviceName(kernel: String? = null): String {
+        return DeviceNameResolver.getCachedOrLocalDeviceName(null, kernel)
     }
 
     private fun getSystemProperty(key: String): String = runCatching {
