@@ -28,6 +28,7 @@ object JailbreakCore {
         "6.18.21-android17-5-g284297031c53-abogki555938958-4k" to "CVE61821",
         "6.18.21-android17-5-g3977fbeb3462-abogki563184321-4k" to "CVE61821",
         "6.18.21-android17-5-g1d099fcb35e0-abogki540753930-4k" to "CVE61821",
+        "6.18.21-android17-5-o-g96f274a16f90-4k" to "CVE61821",
         "6.12.69-android16-6-g242e1a07f878-ab15865446-4k" to "CVE61269",
         "6.12.69-android16-6-g5fd39602326e-ab16372235-4k" to "CVE61269",
         "6.12.69-android16-6-g586bfab1b9c5-abogki536749445-4k" to "CVE61269",
@@ -43,6 +44,7 @@ object JailbreakCore {
         "6.6.118-android15-8-gc4127a25dcf3-ab15863337-4k" to "CVE66118",
         "6.6.118-android15-8-gb1422e39c313-abogki552867473-4k" to "CVE66118",
         "6.6.118-android15-8-o-ga8027a191504-4k" to "CVE66118",
+        "6.6.118-android15-8-g0908354dac1b-ab16143355-4k" to "CVE66118",
         "6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k" to "CVE66127",
         "6.12.58-android16-6-g690108013dcc-abogki576129896-4k" to "CVE61258",
         "6.6.89-android15-8-gdcee9aa4fcbc-ab14676413-4k" to "CVE6689",
@@ -91,6 +93,7 @@ object JailbreakCore {
         "CVE66127" -> "$nativeDir/libk66127.so"
         "CVE6689" -> "$nativeDir/libk6689.so"
         "CVE61" -> "$nativeDir/libk61.so"
+        "CVE43499_FUTEX" -> "$nativeDir/libghostlock.so"
         else -> null
     }
 
@@ -98,6 +101,14 @@ object JailbreakCore {
         "CVE61" -> "android14-6.1"
         "CVE6689", "CVE66118", "CVE66127" -> "android15-6.6"
         "CVE61821" -> "android17-6.18"
+        "CVE43499_FUTEX" -> when {
+            release.contains("android17-6.18") -> "android17-6.18"
+            release.contains("android16-6.12") -> "android16-6.12"
+            release.contains("android15-6.6") -> "android15-6.6"
+            release.contains("android14-6.1") -> "android14-6.1"
+            release.contains("5.15") -> "android12-5.15"
+            else -> "android16-6.12"
+        }
         else -> "android16-6.12"
     }
 
@@ -208,23 +219,7 @@ object JailbreakCore {
     }
 
     fun resolveDeviceName(): String {
-        val marketName = when (Build.MANUFACTURER.orEmpty().lowercase()) {
-            "xiaomi" -> getSystemProperty("ro.product.marketname")
-            "oppo", "oneplus", "realme", "oplus" -> getSystemProperty("ro.vendor.oplus.market.name")
-            "vivo" -> getSystemProperty("ro.vivo.market.name")
-            "honor", "huawei" -> getSystemProperty("ro.config.marketing_name")
-            "zte", "nubia" -> getSystemProperty("ro.vendor.product.ztename")
-            else -> ""
-        }.trim().takeIf {
-            it.isNotEmpty() && !it.equals(Build.UNKNOWN, ignoreCase = true) &&
-                !it.equals("null", ignoreCase = true)
-        }
-        if (marketName != null) return marketName
-        return buildString {
-            append(Build.MANUFACTURER)
-            if (!Build.BRAND.equals(Build.MANUFACTURER, ignoreCase = true)) append(" ").append(Build.BRAND)
-            append(" ").append(Build.MODEL)
-        }
+        return DeviceNameResolver.getCachedOrLocalDeviceName()
     }
 
     private fun getSystemProperty(key: String): String = runCatching {
@@ -272,7 +267,7 @@ object JailbreakCore {
         val susfsKo =
             if (cfg.kind == "CVE61821") "libsusfs_guard_lkm.so" else "libsusfs_guard_lkm_612.so"
         val nativeDir = context.applicationInfo.nativeLibraryDir
-        return arrayOf(
+        val baseEnv = mutableListOf(
             "PATH=/system/bin:/system/xbin:/data/adb/ksu/bin",
             "HOME=/",
             "PYB110_DIR=$dir",
@@ -293,6 +288,32 @@ object JailbreakCore {
             "PYB110_VFS_KO=$nativeDir/libhybridmount.so",
             "PYB110_SAFE_MODE=${if (cfg.safeModeModules) "1" else "0"}"
         )
+
+        // Inject dynamic profile environment if profile is available
+        val dynProfile = DynamicProfileManager.lookup(cfg.release)
+        if (dynProfile != null) {
+            val safeName = cfg.release.replace('/', '_').replace('\\', '_')
+            val confFile = java.io.File(context.filesDir, "kernel_profiles/$safeName.conf")
+            baseEnv.add("PYB110_DYNAMIC_PROFILE=1")
+            baseEnv.add("PYB110_PROFILE_MODEL=${dynProfile.model}")
+            baseEnv.add("PYB110_PROFILE_ENGINE=${dynProfile.engine}")
+            baseEnv.add("PYB110_TIMER_SITE=${dynProfile.timerSite}")
+            baseEnv.add("PYB110_TIMER_LOW21=${dynProfile.timerLow21}")
+            baseEnv.add("PYB110_COPY_LOW21=${dynProfile.copyLow21}")
+            baseEnv.add("PYB110_SELINUX_STATE=${dynProfile.selinuxState}")
+            baseEnv.add("PYB110_PANIC_ON_WARN=${dynProfile.panicOnWarn}")
+            baseEnv.add("PYB110_ROOT_USER=${dynProfile.rootUser}")
+            baseEnv.add("PYB110_INIT_USER_NS=${dynProfile.initUserNs}")
+            baseEnv.add("PYB110_INIT_UCOUNTS=${dynProfile.initUcounts}")
+            baseEnv.add("PYB110_INIT_GROUPS=${dynProfile.initGroups}")
+            baseEnv.add("PYB110_SITE_MASK=${dynProfile.siteMask}")
+            if (confFile.exists()) {
+                baseEnv.add("GHOSTLOCK_CONF_PATH=${confFile.absolutePath}")
+            }
+            baseEnv.add("GHOSTLOCK_ROUTE=${dynProfile.siteMask}")
+        }
+
+        return baseEnv.toTypedArray()
     }
 
     fun setKernelSuSafeMode(enabled: Boolean, runShell: (String) -> Pair<Int, String>): Pair<Int, String> {
@@ -355,5 +376,91 @@ object JailbreakCore {
         } finally {
             p.close()
         }
+    }
+
+    val OTA_PACKAGES = listOf(
+        // Google / GMS
+        "com.google.android.gms/.update.SystemUpdateService",
+        "com.google.android.gms/com.google.android.gms.update.SystemUpdateActivity",
+        "com.google.android.ota",
+        // Motorola (Lenovo)
+        "com.motorola.ccc.ota",
+        "com.motorola.blur.updater",
+        "com.motorola.ccc.checkin",
+        // OPPO / OnePlus / Realme (ColorOS / OxygenOS / RealmeUI)
+        "com.oplus.ota",
+        "com.coloros.sau",
+        "com.coloros.sauhelper",
+        "com.oppo.ota",
+        "com.oneplus.opbackup",
+        // Xiaomi / Redmi / POCO (HyperOS / MIUI)
+        "com.android.updater",
+        "com.miui.updater",
+        "com.xiaomi.discover",
+        // Vivo / iQOO (OriginOS / FuntouchOS)
+        "com.bbk.updater",
+        "com.vivo.upslide",
+        "com.iqoo.updater",
+        "com.vivo.abe",
+        // Samsung (One UI)
+        "com.wssyncmldm",
+        "com.sec.android.soagent",
+        "com.samsung.android.fotaagent",
+        "com.samsung.sdhms",
+        // Honor / Huawei (MagicOS / EMUI)
+        "com.huawei.android.hwouc",
+        "com.hihonor.ouc",
+        "com.huawei.hwouc",
+        // Nothing / CMF (Nothing OS)
+        "com.nothing.update",
+        "com.nothing.fota",
+        // Transsion (Tecno / Infinix / itel - HiOS / XOS)
+        "com.transsion.systemupdate",
+        // ZTE / Nubia / RedMagic (MyOS / RedMagic OS)
+        "com.zte.zdm",
+        "com.zte.zdm.softupdate",
+        "com.nubia.softwareupdate",
+        // Sony Xperia
+        "com.sonyericsson.updatecenter",
+        "com.sony.updatecenter",
+        // Asus / ROG Phone
+        "com.asus.fota",
+        "com.asus.dm"
+    )
+
+    fun setBlockOtaUpdates(block: Boolean, runShell: (String) -> Pair<Int, String>): Pair<Int, Int> {
+        var successCount = 0
+        var total = 0
+        for (target in OTA_PACKAGES) {
+            total++
+            val cmd = if (block) {
+                "pm disable-user --user 0 '$target' 2>/dev/null || pm disable '$target' 2>/dev/null"
+            } else {
+                "pm enable --user 0 '$target' 2>/dev/null || pm enable '$target' 2>/dev/null"
+            }
+            val (rc, _) = runShell(cmd)
+            if (rc == 0) successCount++
+        }
+        return successCount to total
+    }
+
+    fun isOtaBlocked(runShell: (String) -> Pair<Int, String>): Boolean {
+        val targets = listOf(
+            "com.google.android.gms", "com.oplus.ota", "com.android.updater",
+            "com.motorola.ccc.ota", "com.bbk.updater", "com.wssyncmldm",
+            "com.sec.android.soagent", "com.huawei.android.hwouc", "com.hihonor.ouc",
+            "com.nothing.update", "com.transsion.systemupdate", "com.zte.zdm", "com.asus.fota"
+        )
+        for (pkg in targets) {
+            val (rc, out) = runShell("pm list packages -d 2>/dev/null | grep '$pkg'")
+            if (rc == 0 && out.isNotBlank()) return true
+        }
+        return false
+    }
+
+    fun isSecurityPatchPatched(patchLevel: String = Build.VERSION.SECURITY_PATCH, engineKind: String? = null): Boolean {
+        if (patchLevel.isBlank()) return false
+        val engine = ExploitEngine.fromId(engineKind)
+        return engine.isPatched(patchLevel)
     }
 }
