@@ -12,7 +12,7 @@
   <a href="https://gitee.com/puci1/Shark/releases/tag/v2.4.1"><img src="docs/badges/gitee.svg" alt="Gitee"></a>
 </p>
 
-<p align="center"><b>English</b> | <a href="README.zh-CN.md">简体中文</a></p>
+<p align="center"><b>English</b> | <a href="README.zh-CN.md">简体中文</a> | <a href="docs/GUIDE.md"><b>📖 Beginner's Guide</b></a></p>
 
 Shark supports OnePlus, OPPO, Realme, iQOO, and Motorola devices without requiring an unlocked bootloader — you only need `adb shell` to get started. The app drives an on-device kernel exploit via Stellar or Shizuku to gain temporary kernel privileges, loads the LKM for your chosen root manager, and sets up a working KernelSU, KernelSU-Next, BakaSU, SukiSU Ultra, or FinaSU root environment.
 
