@@ -64,6 +64,75 @@ object DynamicProfileManager {
                 loadFromJson(local.readText())
             }.onFailure { Log.w(TAG, "Failed to load local profiles: ${it.message}") }
         }
+
+        // Also reload any raw GhostLock .conf profiles saved in filesDir/kernel_profiles
+        val confDir = File(context.filesDir, "kernel_profiles")
+        if (confDir.exists() && confDir.isDirectory) {
+            confDir.listFiles { f -> f.extension.equals("conf", ignoreCase = true) }?.forEach { confFile ->
+                runCatching {
+                    val res = GhostLockConfParser.parseString(confFile.readText(), confFile.name)
+                    if (res is ParseResult.Success && !profiles.containsKey(res.profile.release)) {
+                        profiles[res.profile.release] = res.profile
+                    }
+                }.onFailure { Log.w(TAG, "Failed to load local .conf ${confFile.name}: ${it.message}") }
+            }
+        }
+    }
+
+    data class ValidationResult(val isValid: Boolean, val error: String? = null)
+
+    /**
+     * GhostLock-inspired kernel geometry validator.
+     * Enforces canonical 64-bit address ranges and bitmask sanity before attempting exploit execution,
+     * protecting against null pointer dereferences and kernel panics from corrupt profiles.
+     */
+    fun validateProfile(profile: DynamicKernelProfile): ValidationResult {
+        if (profile.release.isBlank() || !profile.release.contains("Linux version", ignoreCase = true)) {
+            return ValidationResult(false, "Invalid kernel release banner: must contain 'Linux version'")
+        }
+        if (profile.engine.isBlank()) {
+            return ValidationResult(false, "Engine cannot be blank")
+        }
+
+        fun parseHex(name: String, hex: String, minAddr: ULong = 0xffffff8000000000u): Pair<ULong, String?> {
+            val clean = hex.removePrefix("0x").removePrefix("0X").trim()
+            val value = clean.toULongOrNull(16) ?: return 0uL to "Field '$name' has invalid hex value: '$hex'"
+            if (minAddr > 0u && value < minAddr) {
+                return value to "Field '$name' (0x${value.toString(16)}) is outside canonical 64-bit kernel space (>= 0x${minAddr.toString(16)})"
+            }
+            return value to null
+        }
+
+        val (_, sErr) = parseHex("selinux_state", profile.selinuxState)
+        if (sErr != null) return ValidationResult(false, sErr)
+
+        val (_, uErr) = parseHex("init_user_ns", profile.initUserNs)
+        if (uErr != null) return ValidationResult(false, uErr)
+
+        val (_, rErr) = parseHex("root_user", profile.rootUser)
+        if (rErr != null) return ValidationResult(false, rErr)
+
+        val (_, ucErr) = parseHex("init_ucounts", profile.initUcounts)
+        if (ucErr != null) return ValidationResult(false, ucErr)
+
+        val (_, gErr) = parseHex("init_groups", profile.initGroups)
+        if (gErr != null) return ValidationResult(false, gErr)
+
+        if (profile.timerSite.isNotBlank() && profile.timerSite != "0x0" && profile.timerSite != "0") {
+            val (timerSite, tErr) = parseHex("timer_site", profile.timerSite)
+            if (tErr != null) return ValidationResult(false, tErr)
+
+            val tLowClean = profile.timerLow21.removePrefix("0x").removePrefix("0X").trim()
+            val tLow = tLowClean.toULongOrNull(16)
+            if (tLow != null) {
+                val expectedLow21 = timerSite and 0x1fffffu
+                if (tLow != expectedLow21) {
+                    return ValidationResult(false, "timer_low21 (0x${tLow.toString(16)}) does not match timer_site low-21 bits (0x${expectedLow21.toString(16)})")
+                }
+            }
+        }
+
+        return ValidationResult(true)
     }
 
     private fun loadFromJson(jsonStr: String): Int {
@@ -73,7 +142,7 @@ object DynamicProfileManager {
         for (i in 0 until arr.length()) {
             val obj = arr.getJSONObject(i)
             val release = obj.getString("release")
-            profiles[release] = DynamicKernelProfile(
+            val profile = DynamicKernelProfile(
                 release = release,
                 model = obj.optString("model", "Unknown Device"),
                 engine = obj.getString("engine"),
@@ -88,7 +157,13 @@ object DynamicProfileManager {
                 initGroups = obj.getString("init_groups"),
                 siteMask = obj.optString("site_mask", "0xffff")
             )
-            count++
+            val validation = validateProfile(profile)
+            if (validation.isValid) {
+                profiles[release] = profile
+                count++
+            } else {
+                Log.w(TAG, "Skipping invalid profile '${profile.model}' ($release): ${validation.error}")
+            }
         }
         return count
     }
@@ -100,6 +175,8 @@ object DynamicProfileManager {
     fun allProfiles(): List<DynamicKernelProfile> = profiles.values.toList()
 
     fun addProfile(context: Context, profile: DynamicKernelProfile) {
+        val validation = validateProfile(profile)
+        require(validation.isValid) { "Profile validation failed: ${validation.error}" }
         profiles[profile.release] = profile
         saveProfiles(context)
     }
@@ -159,4 +236,7 @@ object DynamicProfileManager {
             }
         }
     }
+
+    suspend fun syncGhostLock(context: Context, currentKernel: String = ""): Result<GhostLockRepoSync.SyncSummary> =
+        GhostLockRepoSync.syncAllFromRepo(context, currentKernel)
 }
