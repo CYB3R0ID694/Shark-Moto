@@ -35,16 +35,50 @@ object DeviceNameResolver {
             "october|november|december|\\d{4}|amoled|oled|ips|lcd|hz|mah|mp|ppi)\\b"
     )
 
-    fun getCachedOrLocalDeviceName(context: Context? = null): String {
+    fun getCachedOrLocalDeviceName(context: Context? = null, kernel: String? = null): String {
         cachedDeviceName?.let { if (it.isNotBlank()) return it }
+
+        val brand = Build.MANUFACTURER.ifBlank { Build.BRAND }.lowercase(Locale.ROOT)
+        val model = Build.MODEL.trim()
+        val device = Build.DEVICE.trim().lowercase(Locale.ROOT)
+        val product = Build.PRODUCT.trim().lowercase(Locale.ROOT)
+
+        // Hardware signatures for known Motorola targets
+        if (brand.contains("motorola") || model.contains("motorola", ignoreCase = true)) {
+            if (model.contains("signature", ignoreCase = true) ||
+                device.contains("canoe") || product.contains("canoe") ||
+                kernel?.contains("6.12.58") == true ||
+                kernel?.contains("ab14987696") == true ||
+                kernel?.contains("ab15950084") == true
+            ) {
+                cachedDeviceName = "Motorola Signature"
+                saveToCache(context, "Motorola Signature")
+                return "Motorola Signature"
+            }
+            if (model.contains("edge 70", ignoreCase = true) ||
+                device.contains("merc") || product.contains("merc") ||
+                kernel?.contains("6.6.89") == true
+            ) {
+                cachedDeviceName = "Motorola Edge 70 Pro"
+                saveToCache(context, "Motorola Edge 70 Pro")
+                return "Motorola Edge 70 Pro"
+            }
+        }
 
         if (context != null) {
             runCatching {
                 val sp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 val saved = sp.getString(PREF_KEY_MARKET_NAME, null)
-                if (!saved.isNullOrBlank() && !isRawModelOnly(saved)) {
-                    cachedDeviceName = saved
-                    return saved
+                if (!saved.isNullOrBlank()) {
+                    // Invalidate bad/stale cache
+                    if (brand.contains("motorola") && saved.contains("Edge 70", ignoreCase = true) &&
+                        (model.contains("signature", ignoreCase = true) || device.contains("canoe") || kernel?.contains("6.12.58") == true)
+                    ) {
+                        sp.edit().remove(PREF_KEY_MARKET_NAME).apply()
+                    } else if (!isRawModelOnly(saved)) {
+                        cachedDeviceName = saved
+                        return saved
+                    }
                 }
             }
         }
@@ -68,8 +102,13 @@ object DeviceNameResolver {
 
     suspend fun resolveDeviceNameOnline(
         context: Context? = null,
+        kernel: String? = null,
         forceRefresh: Boolean = false
     ): String = withContext(Dispatchers.IO) {
+        val local = getCachedOrLocalDeviceName(context, kernel)
+        if (!isRawModelOnly(local)) {
+            return@withContext local
+        }
         if (!forceRefresh) {
             val existing = cachedDeviceName
             if (!existing.isNullOrBlank() && !isRawModelOnly(existing)) {
@@ -84,12 +123,6 @@ object DeviceNameResolver {
                     cachedDeviceName = saved
                     return@withContext saved
                 }
-            }
-            val localProp = readLocalMarketProperties()
-            if (localProp.isNotBlank() && !isRawModelOnly(localProp)) {
-                cachedDeviceName = localProp
-                saveToCache(context, localProp)
-                return@withContext localProp
             }
         }
 
@@ -112,7 +145,7 @@ object DeviceNameResolver {
             return@withContext resolved
         }
 
-        val fallback = getCachedOrLocalDeviceName(context)
+        val fallback = getCachedOrLocalDeviceName(context, kernel)
         cachedDeviceName = fallback
         fallback
     }
@@ -156,12 +189,17 @@ object DeviceNameResolver {
 
     private fun isRawModelOnly(name: String): Boolean {
         val trimmed = name.trim()
+        if (trimmed.isEmpty()) return true
+        val lower = trimmed.lowercase(Locale.ROOT)
+        if (MARKETING_KEYWORDS.any { lower.contains(it) } || lower.contains("signature")) {
+            return false
+        }
         val model = Build.MODEL.trim()
-        if (trimmed.equals(model, ignoreCase = true)) return true
-        if (trimmed.equals("${Build.MANUFACTURER} $model", ignoreCase = true)) return true
-        if (trimmed.equals("${Build.BRAND} $model", ignoreCase = true)) return true
+        if (trimmed.equals(model, ignoreCase = true) && !model.matches(Regex("^[A-Za-z0-9_\\-]{3,12}$"))) {
+            return false
+        }
         // Only internal code without branding
-        return false
+        return trimmed.matches(Regex("^[A-Za-z0-9_\\-]{3,12}$"))
     }
 
     private fun queryGoogleSuggest(brand: String, model: String, device: String): String? {
@@ -189,8 +227,12 @@ object DeviceNameResolver {
                 if (jsonArray.length() > 1) {
                     val suggestions = jsonArray.getJSONArray(1)
                     for (i in 0 until suggestions.length()) {
-                        val s = suggestions.getString(i).lowercase(Locale.ROOT)
-                        if (MARKETING_KEYWORDS.any { s.contains(it) }) {
+                        val s = suggestions.getString(i)
+                        val sLower = s.lowercase(Locale.ROOT)
+                        if (q.contains("signature", ignoreCase = true) && sLower.contains("edge")) {
+                            continue
+                        }
+                        if (MARKETING_KEYWORDS.any { sLower.contains(it) } || sLower.contains("signature")) {
                             val candidate = cleanCandidate(s, brand, model)
                             if (!candidate.isNullOrBlank()) {
                                 return candidate

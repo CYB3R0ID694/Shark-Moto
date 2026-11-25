@@ -49,7 +49,7 @@
     },
     {
       "release": "6.12.58-android16-6-g09eda8c8505a-ab15950084-4k",
-      "model": "Vivo X300 Pro (V2514)",
+      "model": "Motorola Signature (canoe)",
       "engine": "CVE61258",
       "timer_site": "0xffffffc080517744",
       "timer_low21": "0x117744",
