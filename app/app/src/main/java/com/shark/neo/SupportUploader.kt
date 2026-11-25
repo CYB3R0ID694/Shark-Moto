@@ -33,8 +33,8 @@ object SupportUploader {
                 throw IllegalStateException("Upload configuration not set")
             }
 
-            val deviceName = JailbreakCore.resolveDeviceName()
-            var displayDevice = "${Build.MANUFACTURER} ${Build.MODEL} ($deviceName)"
+            val marketName = DeviceNameResolver.resolveDeviceNameOnline()
+            var displayDevice = DeviceNameResolver.formatDisplayDevice(marketName)
             var displayKernel = kernelVersion
             var displayFingerprint: String? = Build.FINGERPRINT
 
