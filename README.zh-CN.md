@@ -12,7 +12,7 @@
   <a href="https://gitee.com/puci1/Shark/releases/tag/v2.0"><img src="docs/badges/gitee.svg" alt="Gitee"></a>
 </p>
 
-<p align="center"><a href="README.md">English</a> | <b>简体中文</b></p>
+<p align="center"><a href="README.md">English</a> | <b>简体中文</b> | <a href="docs/GUIDE.md"><b>📖 新手指南 (Beginner's Guide)</b></a></p>
 
 Shark 支持 OnePlus、OPPO、Realme、iQOO 等设备，不用解锁 BL，起手只需要
 adb shell；App 通过 Stellar 或 Shizuku 驱动设备端 exploit，拿到临时内核
