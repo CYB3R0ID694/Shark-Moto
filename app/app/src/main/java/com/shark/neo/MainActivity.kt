@@ -99,6 +99,8 @@ import androidx.compose.material.icons.filled.RemoveModerator
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
@@ -330,6 +332,10 @@ class MainActivity : ComponentActivity() {
     private var blockOtaUpdates by mutableStateOf(false)
     private var patchLevelDialogVisible by mutableStateOf(false)
     private var patchWarningDismissed by mutableStateOf(false)
+    private var ghostLockManagerDialogVisible by mutableStateOf(false)
+    private var selectedProfileForDetails by mutableStateOf<DynamicKernelProfile?>(null)
+    private var profileSearchQuery by mutableStateOf("")
+    private var clearProfilesConfirmVisible by mutableStateOf(false)
 
     private val bootPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -1145,6 +1151,389 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
+    private fun GhostLockManagerDialog() {
+        if (!ghostLockManagerDialogVisible) return
+        val scheme = CouiTheme.colorScheme
+        val accent = scheme.accent
+        val allProfiles = remember(dynamicProfileCount) { DynamicProfileManager.allProfiles() }
+        val filtered = remember(allProfiles, profileSearchQuery) {
+            if (profileSearchQuery.isBlank()) {
+                allProfiles
+            } else {
+                val q = profileSearchQuery.trim().lowercase()
+                allProfiles.filter {
+                    it.model.lowercase().contains(q) ||
+                    it.release.lowercase().contains(q) ||
+                    it.engine.lowercase().contains(q)
+                }
+            }
+        }
+
+        Dialog(
+            onDismissRequest = {
+                ghostLockManagerDialogVisible = false
+                profileSearchQuery = ""
+            },
+            title = "${AppStrings.manageGhostLockProfiles(appLanguage)} (${allProfiles.size})",
+            confirmAction = CouiDialogAction(
+                text = AppStrings.close(appLanguage),
+                onClick = {
+                    ghostLockManagerDialogVisible = false
+                    profileSearchQuery = ""
+                },
+                style = CouiDialogActionStyle.Primary,
+                colors = CouiDialogDefaults.primaryActionColors(accent)
+            ),
+            dismissAction = if (allProfiles.isNotEmpty()) CouiDialogAction(
+                text = AppStrings.clearAllProfiles(appLanguage),
+                onClick = { clearProfilesConfirmVisible = true }
+            ) else null,
+            visible = true
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CouiDialogDefaults.contentPadding)
+            ) {
+                BasicTextField(
+                    value = profileSearchQuery,
+                    onValueChange = { profileSearchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(scheme.card, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    textStyle = TextStyle(color = scheme.onSurface, fontSize = 13.sp),
+                    singleLine = true,
+                    decorationBox = { innerField ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(
+                                icon = Icons.Filled.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = scheme.onSurface.copy(alpha = 0.5f)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (profileSearchQuery.isEmpty()) {
+                                    Text(
+                                        text = AppStrings.searchDevicesPlaceholder(appLanguage),
+                                        kind = CouiTextKind.Description,
+                                        color = scheme.onSurface.copy(alpha = 0.4f)
+                                    )
+                                }
+                                innerField()
+                            }
+                            if (profileSearchQuery.isNotEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clickable { profileSearchQuery = "" },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AppIcon(
+                                        icon = Icons.Filled.Close,
+                                        contentDescription = "Clear",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = scheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                if (filtered.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (allProfiles.isEmpty()) "No profiles loaded" else "No matching profiles found",
+                            kind = CouiTextKind.Description,
+                            color = scheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 380.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filtered, key = { it.release }) { prof ->
+                            val isMatched = prof.release == kernelVersion || kernelVersion.startsWith(prof.release)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (isMatched) accent.copy(alpha = 0.08f) else scheme.card,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .border(
+                                        width = if (isMatched) 1.dp else 0.5.dp,
+                                        color = if (isMatched) accent.copy(alpha = 0.5f) else scheme.onSurface.copy(alpha = 0.08f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { selectedProfileForDetails = prof }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = prof.model,
+                                            kind = CouiTextKind.SectionTitle,
+                                            color = scheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (isMatched) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(accent, RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                                            ) {
+                                                Text(
+                                                    text = AppStrings.activeOnThisDevice(appLanguage),
+                                                    kind = CouiTextKind.Description,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = prof.release,
+                                        kind = CouiTextKind.PreferenceSummary,
+                                        color = scheme.onSurface.copy(alpha = 0.6f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "Engine: ${prof.engine} • selinux: ${prof.selinuxState}",
+                                        kind = CouiTextKind.PreferenceSummary,
+                                        color = accent.copy(alpha = 0.85f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clickable { selectedProfileForDetails = prof },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        AppIcon(
+                                            icon = Icons.Filled.Info,
+                                            contentDescription = "Details",
+                                            modifier = Modifier.size(18.dp),
+                                            tint = scheme.onSurface.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clickable {
+                                                DynamicProfileManager.removeProfile(applicationContext, prof.release)
+                                                dynamicProfileCount = DynamicProfileManager.profileCount()
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "${prof.model}: ${AppStrings.profileDeleted(appLanguage)}",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        AppIcon(
+                                            icon = Icons.Filled.DeleteOutline,
+                                            contentDescription = "Delete",
+                                            modifier = Modifier.size(18.dp),
+                                            tint = Color(0xFFD32F2F)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun GhostLockProfileDetailsDialog() {
+        val prof = selectedProfileForDetails ?: return
+        val scheme = CouiTheme.colorScheme
+        val accent = scheme.accent
+
+        Dialog(
+            onDismissRequest = { selectedProfileForDetails = null },
+            title = prof.model,
+            confirmAction = CouiDialogAction(
+                text = AppStrings.close(appLanguage),
+                onClick = { selectedProfileForDetails = null },
+                style = CouiDialogActionStyle.Primary,
+                colors = CouiDialogDefaults.primaryActionColors(accent)
+            ),
+            dismissAction = CouiDialogAction(
+                text = AppStrings.deleteProfile(appLanguage),
+                onClick = {
+                    DynamicProfileManager.removeProfile(applicationContext, prof.release)
+                    dynamicProfileCount = DynamicProfileManager.profileCount()
+                    selectedProfileForDetails = null
+                    Toast.makeText(
+                        this@MainActivity,
+                        "${prof.model}: ${AppStrings.profileDeleted(appLanguage)}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            ),
+            visible = true
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CouiDialogDefaults.contentPadding)
+            ) {
+                Text(
+                    text = prof.release,
+                    kind = CouiTextKind.Description,
+                    color = scheme.onSurface.copy(alpha = 0.7f)
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 340.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        ProfileFieldRow("Engine", prof.engine)
+                        ProfileFieldRow("selinux_state", prof.selinuxState)
+                        ProfileFieldRow("timer_site", prof.timerSite)
+                        ProfileFieldRow("timer_low21", prof.timerLow21)
+                        ProfileFieldRow("copy_low21", prof.copyLow21)
+                        ProfileFieldRow("panic_on_warn", prof.panicOnWarn)
+                        ProfileFieldRow("root_user", prof.rootUser)
+                        ProfileFieldRow("init_user_ns", prof.initUserNs)
+                        ProfileFieldRow("init_ucounts", prof.initUcounts)
+                        ProfileFieldRow("init_groups", prof.initGroups)
+                        ProfileFieldRow("site_mask", prof.siteMask)
+
+                        Spacer(Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(scheme.card, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("profile_json", prof.toJsonString()))
+                                    Toast.makeText(this@MainActivity, AppStrings.copiedKernel(appLanguage), Toast.LENGTH_SHORT).show()
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                AppIcon(
+                                    icon = Icons.Filled.ContentCopy,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = accent
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "Copy JSON",
+                                    kind = CouiTextKind.SectionTitle,
+                                    color = accent
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ProfileFieldRow(name: String, value: String) {
+        val scheme = CouiTheme.colorScheme
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(scheme.card, RoundedCornerShape(6.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = name,
+                kind = CouiTextKind.PreferenceSummary,
+                color = scheme.onSurface.copy(alpha = 0.65f)
+            )
+            SelectionContainer {
+                BasicText(
+                    text = value.ifEmpty { "0x0" },
+                    style = rememberCouiTextStyle(CouiTextKind.Description).copy(
+                        fontFamily = FontFamily.Monospace,
+                        color = scheme.onSurface
+                    )
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun ClearProfilesConfirmDialog() {
+        if (!clearProfilesConfirmVisible) return
+        val scheme = CouiTheme.colorScheme
+
+        Dialog(
+            onDismissRequest = { clearProfilesConfirmVisible = false },
+            title = AppStrings.clearAllProfiles(appLanguage),
+            confirmAction = CouiDialogAction(
+                text = AppStrings.clearAllProfiles(appLanguage),
+                onClick = {
+                    clearProfilesConfirmVisible = false
+                    DynamicProfileManager.clearAll(applicationContext)
+                    dynamicProfileCount = DynamicProfileManager.profileCount()
+                    Toast.makeText(this@MainActivity, "Profiles reset to stock defaults", Toast.LENGTH_SHORT).show()
+                },
+                style = CouiDialogActionStyle.Primary,
+                colors = CouiDialogDefaults.primaryActionColors(Color(0xFFD32F2F))
+            ),
+            dismissAction = CouiDialogAction(
+                text = AppStrings.cancel(appLanguage),
+                onClick = { clearProfilesConfirmVisible = false }
+            ),
+            visible = true
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CouiDialogDefaults.contentPadding)
+            ) {
+                Text(
+                    text = AppStrings.clearAllProfilesConfirm(appLanguage),
+                    kind = CouiTextKind.Description,
+                    color = scheme.onSurface
+                )
+            }
+        }
+    }
+
+    @Composable
     private fun AppRoot() {
         if (!languageChosen) {
             LanguageGate(onAccept = { chosen ->
@@ -1287,6 +1676,9 @@ class MainActivity : ComponentActivity() {
         SoftRebootConfirmDialog()
         RerunBlockedDialog()
         PatchLevelWarningDialog()
+        GhostLockManagerDialog()
+        GhostLockProfileDetailsDialog()
+        ClearProfilesConfirmDialog()
     }
 
     @Composable
@@ -2655,6 +3047,14 @@ class MainActivity : ComponentActivity() {
                     )
                     Divider(startIndent = itemDividerIndent(), color = colors.divider)
                     SettingItem(
+                        icon = Icons.Filled.Layers,
+                        title = AppStrings.manageGhostLockProfiles(appLanguage),
+                        summary = "${AppStrings.manageGhostLockProfilesSummary(appLanguage)} (${dynamicProfileCount})",
+                        onClick = { ghostLockManagerDialogVisible = true },
+                        trailing = { Chevron() }
+                    )
+                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingItem(
                         icon = Icons.Filled.Memory,
                         title = if (parsingBoot) AppStrings.parsingBootTitle(appLanguage) else AppStrings.parseBootImage(appLanguage),
                         summary = AppStrings.parseBootImageSummary(appLanguage),
@@ -3239,6 +3639,14 @@ class MainActivity : ComponentActivity() {
                         summary = AppStrings.syncGhostLockSummary(appLanguage),
                         onClick = { syncGhostLockProfilesOnline() },
                         enabled = !syncingProfiles && !syncingGhostLock,
+                        trailing = { Chevron() }
+                    )
+                    Divider(startIndent = itemDividerIndent(), color = colors.divider)
+                    SettingItem(
+                        icon = Icons.Filled.Layers,
+                        title = AppStrings.manageGhostLockProfiles(appLanguage),
+                        summary = "${AppStrings.manageGhostLockProfilesSummary(appLanguage)} (${dynamicProfileCount})",
+                        onClick = { ghostLockManagerDialogVisible = true },
                         trailing = { Chevron() }
                     )
                     Divider(startIndent = itemDividerIndent(), color = colors.divider)
