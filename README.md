@@ -82,6 +82,7 @@ Manager APKs are **not** bundled with Shark. Standard mode runs `ksud` directly 
 - **Live Logs & History**: Real-time scrolling execution logs. Every run saves a complete log to the History tab where it can be inspected, deleted, or swiped left to export and share.
 - **Online Updates**: Checks Gitee Releases on startup and falls back to GitHub; downloads new releases in-app and verifies SHA-256 and APK signature before handing off to the system installer.
 - **Droidspaces Support**: On `6.18`, fetch the latest `droidspaces_lkm` module in one tap, saved to `Download/Shark/` for flashing inside KernelSU Manager (not bundled inside the APK).
+- **Dynamic GhostLock Profiles**: Built-in native HOCON `.conf` parser and cloud synchronization with [GhostLock](https://github.com/YuKongA/ghostlock-app) (YuKongA), with dual-layer offline persistence on-device.
 
 ## Two Root Modes
 
@@ -207,7 +208,8 @@ The universal KO and dual-KMI loader are built in [KSU-Universal](https://github
 - Original Shark code is licensed under GPL-3.0 (see [LICENSE](LICENSE)); third-party components are listed in [NOTICE](NOTICE).
 - Universal KSU LKM is based on SukiSU Ultra (GPL-3.0).
 - SUSFS guard and Hybrid Mount are licensed under GPL-2.0.
-- CVE-2026-98260 exploit implementation references AzirX1337's public port (MIT).
+- CVE-2026-98260 exploit implementation references AzirX1337's public port (MIT) and YuKongA's implementation (MIT).
+- Dynamic device profile schema, kernel `.conf` configurations, and CVE-2026-43499 integration reference [GhostLock](https://github.com/YuKongA/ghostlock-app) by YuKongA (GPL-3.0).
 - UI uses COUI-Kit (MPL-2.0); remote execution uses the Shizuku API (Apache-2.0) and Stellar API.
 
 ## Releases

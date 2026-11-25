@@ -259,6 +259,13 @@ private val localLicenses = listOf(
         "MIT",
         "licenses/MIT.txt",
         "https://github.com/YuKongA/CVE-2026-98260"
+    ),
+    LocalLicense(
+        "GhostLock (YuKongA / ghostlock-app)",
+        "Kernel configuration profiles (.conf) and CVE-2026-43499 integration",
+        "GPL-3.0",
+        "licenses/GPL-3.0.txt",
+        "https://github.com/YuKongA/ghostlock-app"
     )
 )
 

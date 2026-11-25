@@ -99,6 +99,7 @@ KernelSU、KernelSU-Next、BakaSU、SukiSU Ultra、FinaSU 五家。
   应用内下载，校验 SHA-256 和 APK 签名后再交给系统安装器。
 - **Droidspaces 支持**：6.18 下可一键获取最新的 `droidspaces_lkm` 模块，
   保存到 `Download/Shark/`，之后到 KernelSU 管理器里刷入；App 不内置该模块。
+- **GhostLock 动态配置支持**：内置原生 HOCON `.conf` 解析器，支持从 [GhostLock](https://github.com/YuKongA/ghostlock-app)（YuKongA）一键同步最新社区设备配置，并提供离线双层持久化存储。
 
 ## 两种 root 方式
 
@@ -235,7 +236,8 @@ Shark 只内置编译好的 `libksud_universal.so`。
 - Shark 自研代码采用 GPL-3.0，见 `LICENSE`；第三方组件见 `NOTICE`。
 - 通用 KSU LKM 基于 SukiSU Ultra，GPL-3.0。
 - SUSFS guard 和 Hybrid Mount 为 GPL-2.0。
-- CVE-2026-98260 设计参考 AzirX1337 的公开移植（MIT）。
+- CVE-2026-98260 设计参考 AzirX1337 的公开移植（MIT）与 YuKongA 的实现（MIT）。
+- 动态设备配置规范、内核 `.conf` 配置文件结构与 CVE-2026-43499 参考自 [GhostLock](https://github.com/YuKongA/ghostlock-app)（YuKongA，GPL-3.0）。
 - UI 使用 COUI-Kit（MPL-2.0），远程执行使用 Shizuku API（Apache-2.0）。
 
 ## 发布
