@@ -38,13 +38,80 @@ object BootSymbolParser {
 
     suspend fun parseFromUri(context: Context, uri: Uri): ParseResult = withContext(Dispatchers.IO) {
         runCatching {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            val resolver = context.contentResolver
+            val filename = uri.lastPathSegment ?: "unknown"
+
+            val inputStream = resolver.openInputStream(uri)
                 ?: return@withContext ParseResult.Error("Could not read selected file.")
-            parseBytes(bytes, uri.lastPathSegment ?: "unknown")
+
+            // Inspect stream header without loading multi-gigabyte OTA ZIP into memory (GhostLock-inspired memory guard)
+            val buffered = java.io.BufferedInputStream(inputStream, 65536)
+            buffered.mark(8)
+            val header = ByteArray(4)
+            val readHeader = buffered.read(header, 0, 4)
+            buffered.reset()
+
+            val isZip = readHeader == 4 &&
+                    header[0] == 0x50.toByte() && header[1] == 0x4b.toByte() &&
+                    header[2] == 0x03.toByte() && header[3] == 0x04.toByte()
+
+            if (isZip) {
+                // Stream ZIP entries directly to avoid OutOfMemoryError on full OTA ZIPs
+                var hasPayloadBin = false
+                ZipInputStream(buffered).use { zis ->
+                    var entry = zis.nextEntry
+                    while (entry != null) {
+                        val name = entry.name
+                        val lower = name.lowercase()
+                        if (lower.endsWith("payload.bin")) {
+                            hasPayloadBin = true
+                        }
+                        if (lower.endsWith("boot.img") ||
+                            lower == "boot" ||
+                            lower.endsWith("init_boot.img") ||
+                            lower.endsWith("vendor_boot.img") ||
+                            lower == "image" ||
+                            lower.endsWith("kernel")) {
+                            Log.i(TAG, "Streaming target partition from ZIP: $name")
+                            val entryBytes = readBoundedStream(zis, 192 * 1024 * 1024)
+                            return@withContext parseBytes(entryBytes, name)
+                        }
+                        zis.closeEntry()
+                        entry = zis.nextEntry
+                    }
+                }
+
+                if (hasPayloadBin) {
+                    return@withContext ParseResult.Error(
+                        "OTA archive contains payload.bin. Modern A/B updates store partitions inside payload.bin. " +
+                        "Please extract boot.img or init_boot.img using payload-dumper, or select the boot partition directly."
+                    )
+                }
+                return@withContext ParseResult.Error("No boot.img, init_boot.img, or kernel found in ZIP archive.")
+            }
+
+            // Not a ZIP archive: read bounded stream (max 256MB) to prevent OOM on non-kernel files
+            val rawBytes = buffered.use { readBoundedStream(it, 256 * 1024 * 1024) }
+            parseBytes(rawBytes, filename)
         }.getOrElse {
             Log.e(TAG, "Failed to parse from uri", it)
             ParseResult.Error("Parse failed: ${it.message}")
         }
+    }
+
+    private fun readBoundedStream(input: java.io.InputStream, maxBytes: Int): ByteArray {
+        val bos = ByteArrayOutputStream()
+        val buffer = ByteArray(32768)
+        var total = 0
+        var read: Int
+        while (input.read(buffer).also { read = it } != -1) {
+            total += read
+            if (total > maxBytes) {
+                throw IllegalStateException("File or partition exceeds maximum allowed size (${maxBytes / (1024 * 1024)}MB).")
+            }
+            bos.write(buffer, 0, read)
+        }
+        return bos.toByteArray()
     }
 
     fun parseBytes(data: ByteArray, filename: String): ParseResult {
@@ -52,7 +119,7 @@ object BootSymbolParser {
             return ParseResult.Error("File too small (${data.size} bytes).")
         }
 
-        // Check if ZIP archive containing boot.img
+        // Check if ZIP archive containing boot.img / init_boot.img
         if (data.size >= 4 && data[0] == 0x50.toByte() && data[1] == 0x4b.toByte() &&
             data[2] == 0x03.toByte() && data[3] == 0x04.toByte()) {
             runCatching {
@@ -60,10 +127,13 @@ object BootSymbolParser {
                     var entry = zis.nextEntry
                     while (entry != null) {
                         val name = entry.name
-                        if (name.endsWith("boot.img", ignoreCase = true) ||
-                            name.equals("boot", ignoreCase = true) ||
-                            name.equals("Image", ignoreCase = true) ||
-                            name.endsWith("kernel", ignoreCase = true)) {
+                        val lower = name.lowercase()
+                        if (lower.endsWith("boot.img") ||
+                            lower == "boot" ||
+                            lower.endsWith("init_boot.img") ||
+                            lower.endsWith("vendor_boot.img") ||
+                            lower == "image" ||
+                            lower.endsWith("kernel")) {
                             return parseBytes(zis.readBytes(), name)
                         }
                         entry = zis.nextEntry
@@ -72,8 +142,16 @@ object BootSymbolParser {
             }
         }
 
+        // Check if GhostLock .conf profile (HOCON format)
+        val textHeader = runCatching { String(data.take(1024).toByteArray(), Charsets.UTF_8) }.getOrNull() ?: ""
+        if (filename.endsWith(".conf", ignoreCase = true) || textHeader.contains("symbols {") || textHeader.contains("route =") || textHeader.contains("route:")) {
+            val confResult = GhostLockConfParser.parseString(String(data, Charsets.UTF_8), filename)
+            if (confResult is ParseResult.Success) {
+                return confResult
+            }
+        }
+
         // Check if text symbol file (e.g. ic-syms.txt)
-        val textHeader = runCatching { String(data.take(512).toByteArray(), Charsets.UTF_8) }.getOrNull() ?: ""
         if (textHeader.startsWith("#") || textHeader.contains("build=") || textHeader.contains("selinux_state=")) {
             return parseTextTable(String(data, Charsets.UTF_8), filename)
         }
