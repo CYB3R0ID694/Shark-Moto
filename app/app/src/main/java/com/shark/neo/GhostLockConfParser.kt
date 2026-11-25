@@ -51,11 +51,14 @@ object GhostLockConfParser {
 
             val selinux = parsed.symbols["selinux_state"]
                 ?: parsed.symbols["selinux_enforcing"]
+                ?: parsed.offsets["selinux_enforcing"]
                 ?: "0x0"
             val initUserNs = parsed.symbols["init_user_ns"]
+                ?: parsed.offsets["init_user_ns"]
                 ?: "0x0"
             val rootUser = parsed.symbols["init_cred"]
                 ?: parsed.symbols["root_user"]
+                ?: parsed.offsets["init_cred"]
                 ?: "0x0"
             val initUcounts = parsed.symbols["init_ucounts"] ?: "0x0"
             val initGroups = parsed.symbols["init_groups"] ?: "0x0"
@@ -144,14 +147,18 @@ object GhostLockConfParser {
             val value = unquote(line.substring(sepIndex + 1).trim())
 
             when (currentBlock) {
-                "symbols" -> symbols[key] = normalizeHex(value)
-                "offsets" -> offsets[key] = normalizeHex(value)
+                "symbols", "symbol" -> symbols[key] = normalizeHex(value)
+                "offsets", "offset" -> {
+                    val hexVal = normalizeHex(value)
+                    offsets[key] = hexVal
+                    symbols[key] = hexVal
+                }
                 else -> {
                     when (key.lowercase()) {
                         "release" -> release = value
                         "model" -> model = value
                         "route" -> route = value
-                        "selinux_state", "selinux" -> symbols["selinux_state"] = normalizeHex(value)
+                        "selinux_state", "selinux", "selinux_enforcing" -> symbols["selinux_state"] = normalizeHex(value)
                         "init_user_ns" -> symbols["init_user_ns"] = normalizeHex(value)
                         "init_cred" -> symbols["init_cred"] = normalizeHex(value)
                     }

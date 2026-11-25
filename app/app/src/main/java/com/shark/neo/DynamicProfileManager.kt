@@ -87,11 +87,16 @@ object DynamicProfileManager {
      * protecting against null pointer dereferences and kernel panics from corrupt profiles.
      */
     fun validateProfile(profile: DynamicKernelProfile): ValidationResult {
-        if (profile.release.isBlank() || !profile.release.contains("Linux version", ignoreCase = true)) {
-            return ValidationResult(false, "Invalid kernel release banner: must contain 'Linux version'")
+        if (profile.release.isBlank()) {
+            return ValidationResult(false, "Release cannot be blank")
         }
         if (profile.engine.isBlank()) {
             return ValidationResult(false, "Engine cannot be blank")
+        }
+
+        // GhostLock futex profiles use relative offsets, not absolute canonical KASLR addresses
+        if (profile.engine.equals("CVE43499_FUTEX", ignoreCase = true)) {
+            return ValidationResult(true)
         }
 
         fun parseHex(name: String, hex: String, minAddr: ULong = 0xffffff8000000000u): Pair<ULong, String?> {
@@ -103,20 +108,30 @@ object DynamicProfileManager {
             return value to null
         }
 
-        val (_, sErr) = parseHex("selinux_state", profile.selinuxState)
-        if (sErr != null) return ValidationResult(false, sErr)
+        if (profile.selinuxState.isNotBlank() && profile.selinuxState != "0x0" && profile.selinuxState != "0") {
+            val (_, sErr) = parseHex("selinux_state", profile.selinuxState)
+            if (sErr != null) return ValidationResult(false, sErr)
+        }
 
-        val (_, uErr) = parseHex("init_user_ns", profile.initUserNs)
-        if (uErr != null) return ValidationResult(false, uErr)
+        if (profile.initUserNs.isNotBlank() && profile.initUserNs != "0x0" && profile.initUserNs != "0") {
+            val (_, uErr) = parseHex("init_user_ns", profile.initUserNs)
+            if (uErr != null) return ValidationResult(false, uErr)
+        }
 
-        val (_, rErr) = parseHex("root_user", profile.rootUser)
-        if (rErr != null) return ValidationResult(false, rErr)
+        if (profile.rootUser.isNotBlank() && profile.rootUser != "0x0" && profile.rootUser != "0") {
+            val (_, rErr) = parseHex("root_user", profile.rootUser)
+            if (rErr != null) return ValidationResult(false, rErr)
+        }
 
-        val (_, ucErr) = parseHex("init_ucounts", profile.initUcounts)
-        if (ucErr != null) return ValidationResult(false, ucErr)
+        if (profile.initUcounts.isNotBlank() && profile.initUcounts != "0x0" && profile.initUcounts != "0") {
+            val (_, ucErr) = parseHex("init_ucounts", profile.initUcounts)
+            if (ucErr != null) return ValidationResult(false, ucErr)
+        }
 
-        val (_, gErr) = parseHex("init_groups", profile.initGroups)
-        if (gErr != null) return ValidationResult(false, gErr)
+        if (profile.initGroups.isNotBlank() && profile.initGroups != "0x0" && profile.initGroups != "0") {
+            val (_, gErr) = parseHex("init_groups", profile.initGroups)
+            if (gErr != null) return ValidationResult(false, gErr)
+        }
 
         if (profile.timerSite.isNotBlank() && profile.timerSite != "0x0" && profile.timerSite != "0") {
             val (timerSite, tErr) = parseHex("timer_site", profile.timerSite)

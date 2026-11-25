@@ -108,6 +108,7 @@ object GhostLockRepoSync {
                 for (filename in confFiles) {
                     // Skip templates, includes, and index
                     if (filename.equals("index.conf", ignoreCase = true) ||
+                        filename.contains("template", ignoreCase = true) ||
                         filename.startsWith("credential", ignoreCase = true) ||
                         filename.startsWith("kernelsnitch", ignoreCase = true) ||
                         filename.startsWith("execution", ignoreCase = true)
@@ -117,7 +118,7 @@ object GhostLockRepoSync {
                     val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
                         connectTimeout = 6000
                         readTimeout = 8000
-                        setRequestProperty("User-Agent", "Shark-Neo-Sync")
+                        setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
                     }
 
                     try {
@@ -153,36 +154,37 @@ object GhostLockRepoSync {
     private fun discoverConfFiles(): Set<String> {
         val files = mutableSetOf<String>()
 
-        // 1. Try GitHub Contents API
-        runCatching {
-            val conn = (URL(API_CONTENTS_URL).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 6000
-                readTimeout = 8000
-                setRequestProperty("User-Agent", "Shark-Neo-Sync")
-                setRequestProperty("Accept", "application/vnd.github.v3+json")
-            }
-            try {
-                if (conn.responseCode == 200) {
-                    val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
-                    val array = JSONArray(jsonStr)
-                    for (i in 0 until array.length()) {
-                        val item = array.getJSONObject(i)
-                        val name = item.optString("name", "")
-                        if (name.endsWith(".conf", ignoreCase = true)) {
-                            files.add(name)
-                        }
-                    }
-                }
-            } finally {
-                conn.disconnect()
-            }
-        }.onFailure { Log.w(TAG, "GitHub API listing failed: ${it.message}, falling back to index.conf") }
-
-        if (files.isNotEmpty()) return files
-
-        // 2. Fallback: Parse index.conf
+        // 1. First fetch index.conf via raw.githubusercontent.com (fast and not rate-limited by GitHub API)
         val indexMap = fetchIndexEntries()
         files.addAll(indexMap.values)
+
+        // 2. Fallback to GitHub Contents API if index.conf returned empty
+        if (files.isEmpty()) {
+            runCatching {
+                val conn = (URL(API_CONTENTS_URL).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 8000
+                    readTimeout = 12000
+                    setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
+                    setRequestProperty("Accept", "application/vnd.github.v3+json")
+                }
+                try {
+                    if (conn.responseCode == 200) {
+                        val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
+                        val array = JSONArray(jsonStr)
+                        for (i in 0 until array.length()) {
+                            val item = array.getJSONObject(i)
+                            val name = item.optString("name", "")
+                            if (name.endsWith(".conf", ignoreCase = true)) {
+                                files.add(name)
+                            }
+                        }
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            }.onFailure { Log.w(TAG, "GitHub API listing failed: ${it.message}") }
+        }
+
         return files
     }
 
@@ -190,40 +192,29 @@ object GhostLockRepoSync {
         val result = mutableMapOf<String, String>()
         runCatching {
             val conn = (URL(INDEX_URL).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 6000
-                readTimeout = 8000
-                setRequestProperty("User-Agent", "Shark-Neo-Sync")
+                connectTimeout = 8000
+                readTimeout = 12000
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
             }
             try {
                 if (conn.responseCode == 200) {
                     val text = conn.inputStream.bufferedReader().use { it.readText() }
-                    val lines = text.lines()
-                    var lastRelease: String? = null
-                    for (rawLine in lines) {
-                        val line = rawLine.trim()
-                        if (line.startsWith("#") || line.startsWith("//") || line.isEmpty()) continue
-
-                        // Match release = "..." or release: "..."
-                        if (line.contains("release", ignoreCase = true) && (line.contains("=") || line.contains(":"))) {
-                            val value = line.substringAfter('=').substringAfter(':').trim()
-                                .removeSurrounding("\"").removeSuffix(",")
-                            lastRelease = value
+                    // Match { release = "...", file = "..." } or release = "..." / file = "..."
+                    val entryRegex = Regex("""release\s*=\s*"([^"]+)"[\s,]+file\s*=\s*"([^"]+)"""")
+                    for (m in entryRegex.findAll(text)) {
+                        val rel = m.groupValues[1].trim()
+                        val fil = m.groupValues[2].trim()
+                        if (fil.endsWith(".conf", ignoreCase = true)) {
+                            result[rel] = fil
                         }
-
-                        // Match file = "..." or file: "..." or include "..."
-                        if (line.contains("file", ignoreCase = true) && (line.contains("=") || line.contains(":"))) {
-                            val filename = line.substringAfter('=').substringAfter(':').trim()
-                                .removeSurrounding("\"").removeSuffix(",")
-                            if (lastRelease != null && filename.endsWith(".conf")) {
-                                result[lastRelease] = filename
-                            }
-                        } else if (line.startsWith("include", ignoreCase = true)) {
-                            val inc = line.removePrefix("include").trim()
-                                .removeSurrounding("\"").substringAfterLast('/')
-                            if (inc.endsWith(".conf")) {
-                                val autoRelease = inc.removeSuffix(".conf")
-                                result[autoRelease] = inc
-                            }
+                    }
+                    // Also support file-only lines or include lines
+                    val incRegex = Regex("""(?:include|file\s*=)\s*"([^"]+\.conf)"""")
+                    for (m in incRegex.findAll(text)) {
+                        val fil = m.groupValues[1].substringAfterLast('/').trim()
+                        val rel = fil.removeSuffix(".conf")
+                        if (!result.containsKey(rel)) {
+                            result[rel] = fil
                         }
                     }
                 }
