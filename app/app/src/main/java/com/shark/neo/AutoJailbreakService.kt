@@ -178,7 +178,7 @@ class AutoJailbreakService : Service() {
                 susfsSupport = prefs.getBoolean("susfs_support", false),
                 vfsSupport = prefs.getBoolean("vfs_support", false),
                 universal = managerKind == "DYNAMIC" && JailbreakCore.supportsUniversal(kind),
-                chaseRetry = prefs.getBoolean("chase_retry", JailbreakCore.defaultChaseRetry(kind)),
+                chaseRetry = prefs.getBoolean("chase_retry", JailbreakCore.defaultChaseRetry(kind, release)),
                 customManagerPkg = managerPkg,
                 safeModeModules = prefs.getBoolean("safe_mode_modules", false)
             )

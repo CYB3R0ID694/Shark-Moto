@@ -5488,7 +5488,7 @@ class MainActivity : ComponentActivity() {
     private fun supportsChaseRetry(): Boolean =
         JailbreakCore.supportsChaseRetry(exploit.name, kernelVersion)
 
-    private fun defaultChaseRetry(): Boolean = JailbreakCore.defaultChaseRetry(exploit.name)
+    private fun defaultChaseRetry(): Boolean = JailbreakCore.defaultChaseRetry(exploit.name, kernelVersion)
 
     private fun managerChoices(): List<ManagerKind> =
         if (supportsUniversal()) ManagerKind.entries
