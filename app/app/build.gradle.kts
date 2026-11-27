@@ -37,8 +37,8 @@ android {
         applicationId = "com.shark.neo"
         minSdk = 33
         targetSdk = 37
-        versionCode = 108
-        versionName = "2.6"
+        versionCode = 109
+        versionName = "2.6.1"
         ndk {
             abiFilters.add("arm64-v8a")
         }

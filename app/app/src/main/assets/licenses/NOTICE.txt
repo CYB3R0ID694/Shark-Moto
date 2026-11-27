@@ -92,11 +92,4 @@ profile-switch module described in entry 9.
           KSU-Universal project README. The manager APKs' own ksud binaries
           remain external (see "Supported managers" above).
 
-10. GhostLock (ghostlock-app)
-    Source: https://github.com/YuKongA/ghostlock-app
-    License: GPL-3.0
-    Used: Dynamic kernel device profile structure (.conf HOCON format),
-          CVE-2026-43499 reference execution flow, and upstream profile
-          synchronization logic for extended OEM device support.
-
 The application icon is drawn by this project.
