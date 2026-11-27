@@ -78,6 +78,21 @@
       "site_mask": "0xffff"
     },
     {
+      "release": "6.1.157-android14-11-o-g0454ffe79e7c",
+      "model": "realme NARZO 70 Turbo 5G (RMX5003)",
+      "engine": "CVE61",
+      "timer_site": "0xffffffc00859c1dc",
+      "timer_low21": "0x19c1dc",
+      "copy_low21": "0x1ce0ec",
+      "selinux_state": "0xffffffc00a27d0a8",
+      "panic_on_warn": "0xffffffc00a02b2c8",
+      "root_user": "0xffffffc00a050d40",
+      "init_user_ns": "0xffffffc00a050ab0",
+      "init_ucounts": "0xffffffc00a0525c8",
+      "init_groups": "0xffffffc00a052060",
+      "site_mask": "0xffff"
+    },
+    {
       "release": "6.18.21-android17-5-o-g96f274a16f90-4k",
       "model": "OPPO K14 5G (CPH2869)",
       "engine": "CVE61821",
@@ -106,6 +121,21 @@
       "init_ucounts": "0xffffffc0821711b0",
       "init_groups": "0xffffffc082170c40",
       "site_mask": "0xffff"
+    },
+    {
+      "release": "6.6.118-android15-8-g666ad52b8230-ab15657065-4k",
+      "model": "Redmi Note 17 5G (26021RN18I)",
+      "engine": "CVE66118",
+      "timer_site": "0xffffffc080195d48",
+      "timer_low21": "0x195d48",
+      "copy_low21": "0x0ab93c",
+      "selinux_state": "0xffffffc08236a2e0",
+      "panic_on_warn": "0xffffffc08211ae0c",
+      "root_user": "0xffffffc08213f1e0",
+      "init_user_ns": "0xffffffc08213ef50",
+      "init_ucounts": "0xffffffc082140cb0",
+      "init_groups": "0xffffffc082140740",
+      "site_mask": "0x1fffff"
     }
   ]
 }

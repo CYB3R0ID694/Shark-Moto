@@ -45,10 +45,12 @@ object JailbreakCore {
         "6.6.118-android15-8-gb1422e39c313-abogki552867473-4k" to "CVE66118",
         "6.6.118-android15-8-o-ga8027a191504-4k" to "CVE66118",
         "6.6.118-android15-8-g0908354dac1b-ab16143355-4k" to "CVE66118",
+        "6.6.118-android15-8-g666ad52b8230-ab15657065-4k" to "CVE66118",
         "6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k" to "CVE66127",
         "6.12.58-android16-6-g690108013dcc-abogki576129896-4k" to "CVE61258",
         "6.6.89-android15-8-gdcee9aa4fcbc-ab14676413-4k" to "CVE6689",
-        "6.1.128-android14-11-o-g9f6b860b6402" to "CVE61"
+        "6.1.128-android14-11-o-g9f6b860b6402" to "CVE61",
+        "6.1.157-android14-11-o-g0454ffe79e7c" to "CVE61"
     )
 
     /* Devices whose support is only shipped in the full (vivo) build. */
@@ -93,7 +95,6 @@ object JailbreakCore {
         "CVE66127" -> "$nativeDir/libk66127.so"
         "CVE6689" -> "$nativeDir/libk6689.so"
         "CVE61" -> "$nativeDir/libk61.so"
-        "CVE43499_FUTEX" -> "$nativeDir/libghostlock.so"
         else -> null
     }
 
@@ -101,14 +102,6 @@ object JailbreakCore {
         "CVE61" -> "android14-6.1"
         "CVE6689", "CVE66118", "CVE66127" -> "android15-6.6"
         "CVE61821" -> "android17-6.18"
-        "CVE43499_FUTEX" -> when {
-            release.contains("android17-6.18") -> "android17-6.18"
-            release.contains("android16-6.12") -> "android16-6.12"
-            release.contains("android15-6.6") -> "android15-6.6"
-            release.contains("android14-6.1") -> "android14-6.1"
-            release.contains("5.15") -> "android12-5.15"
-            else -> "android16-6.12"
-        }
         else -> "android16-6.12"
     }
 
@@ -303,8 +296,6 @@ object JailbreakCore {
         // Inject dynamic profile environment if profile is available
         val dynProfile = DynamicProfileManager.lookup(cfg.release)
         if (dynProfile != null) {
-            val safeName = cfg.release.replace('/', '_').replace('\\', '_')
-            val confFile = java.io.File(context.filesDir, "kernel_profiles/$safeName.conf")
             baseEnv.add("PYB110_DYNAMIC_PROFILE=1")
             baseEnv.add("PYB110_PROFILE_MODEL=${dynProfile.model}")
             baseEnv.add("PYB110_PROFILE_ENGINE=${dynProfile.engine}")
@@ -318,10 +309,6 @@ object JailbreakCore {
             baseEnv.add("PYB110_INIT_UCOUNTS=${dynProfile.initUcounts}")
             baseEnv.add("PYB110_INIT_GROUPS=${dynProfile.initGroups}")
             baseEnv.add("PYB110_SITE_MASK=${dynProfile.siteMask}")
-            if (confFile.exists()) {
-                baseEnv.add("GHOSTLOCK_CONF_PATH=${confFile.absolutePath}")
-            }
-            baseEnv.add("GHOSTLOCK_ROUTE=${dynProfile.siteMask}")
         }
 
         if (isColorOSDevice() &&
