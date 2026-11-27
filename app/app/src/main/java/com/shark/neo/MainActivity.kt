@@ -283,6 +283,8 @@ class MainActivity : ComponentActivity() {
     private var exploit by mutableStateOf(ExploitKind.UNSUPPORTED)
     private var manager by mutableStateOf(ManagerKind.KERNELSU)
     private var kernelVersion by mutableStateOf("Unknown")
+    private var kernelTooOld by mutableStateOf(false)
+    private var lastParsedProfile: DynamicKernelProfile? = null
     private var deviceModel by mutableStateOf("Unknown")
     private var selinuxText by mutableStateOf("Unknown")
     private var antiRootGuard by mutableStateOf(true)
@@ -534,6 +536,7 @@ class MainActivity : ComponentActivity() {
         val savedManager = prefs.getString("manager", null)
         manager = runCatching { ManagerKind.valueOf(savedManager ?: "") }.getOrDefault(ManagerKind.KERNELSU)
         kernelVersion = runCatching { android.system.Os.uname().release }.getOrDefault("Unknown")
+        kernelTooOld = kernelVersion.split(".").firstOrNull()?.toIntOrNull()?.let { it < 6 } ?: false
         exploit = JailbreakCore.kindFor(kernelVersion)?.let {
             runCatching { ExploitKind.valueOf(it) }.getOrNull()
         } ?: ExploitKind.UNSUPPORTED
@@ -1989,7 +1992,11 @@ class MainActivity : ComponentActivity() {
             item {
                 StatusCard(granted = binderReady && authorized)
             }
-            if (exploit == ExploitKind.UNSUPPORTED) {
+            if (kernelTooOld) {
+                item {
+                    KernelTooOldBanner()
+                }
+            } else if (exploit == ExploitKind.UNSUPPORTED) {
                 item {
                     UnsupportedKernelBanner(onClick = { showDiagnostic = true })
                 }
@@ -2053,6 +2060,44 @@ class MainActivity : ComponentActivity() {
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = AppStrings.patchLevelBannerSummary(Build.VERSION.SECURITY_PATCH, appLanguage),
+                            kind = CouiTextKind.PreferenceSummary,
+                            color = colors.summary
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun KernelTooOldBanner() {
+        val dark = CouiTheme.isDark
+        val colors = CouiPageDefaults.themeColors(dark)
+        val redBg = if (dark) Color(0xFF3B0000) else Color(0xFFFFEBEE)
+        val redTint = Color(0xFFEF5350)
+
+        Group(colors = colors.copy(card = redBg)) {
+            Item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AppIcon(
+                        icon = Icons.Filled.Block,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = redTint
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Kernel Not Supported",
+                            kind = CouiTextKind.SectionTitle,
+                            color = redTint
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "This device runs kernel ${kernelVersion.split(".").firstOrNull() ?: "?"}.x which is below the minimum required version (6.x). This app only supports kernel 6.1 and above.",
                             kind = CouiTextKind.PreferenceSummary,
                             color = colors.summary
                         )
@@ -2224,6 +2269,7 @@ class MainActivity : ComponentActivity() {
             !binderReady -> AppStrings.actionStellarNotRunning(appLanguage)
             !authorized -> AppStrings.actionAuthorizeShizuku(appLanguage)
             alreadyRan -> AppStrings.rebootRequiredAlreadyRan(appLanguage)
+            kernelTooOld -> "Kernel Not Supported"
             exploit == ExploitKind.UNSUPPORTED -> AppStrings.actionDiagnoseAndReport(appLanguage)
             ksuActive -> AppStrings.actionReRoot(appLanguage)
             else -> AppStrings.actionOneClickRoot(appLanguage)
@@ -2234,6 +2280,7 @@ class MainActivity : ComponentActivity() {
                 onClick = {
                     if (!busy) {
                         when {
+                            kernelTooOld -> addLog("Kernel ${kernelVersion.split(".").firstOrNull()}.x not supported — requires 6.x+")
                             !binderReady -> {
                                 addLog("Start Stellar or Shizuku first")
                                 PrivService.openManager(applicationContext)
@@ -2813,36 +2860,10 @@ class MainActivity : ComponentActivity() {
                     } ?: ExploitKind.UNSUPPORTED
                     exploit = newKind
                     parseResultDialog = res
+                    lastParsedProfile = actualProfile
                     addLog("[boot-parser] Success: ${res.banner} (${res.symbolsCount} symbols recovered)")
-                    addLog("[boot-parser] Saved to local profiles.json & queued auto-upload to Telegram.")
+                    addLog("[boot-parser] Saved to local profiles.json.")
                     Toast.makeText(this@MainActivity, AppStrings.parseBootSuccess(res.banner, res.symbolsCount, appLanguage), Toast.LENGTH_LONG).show()
-
-                    // Automatically send generated profile + device details to Telegram
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val profJson = res.profile.toJsonString()
-                        val diag = """
-                            Auto-Extracted Profile from boot.img
-                            Host Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})
-                            Brand/Board: ${Build.BRAND} / ${Build.BOARD} / ${Build.HARDWARE}
-                            Host Kernel: $kernelVersion
-                            Parsed Kernel: ${res.banner}
-                            Engine: ${res.profile.engine}
-                            Symbols Recovered: ${res.symbolsCount}
-                        """.trimIndent()
-                        SupportUploader.uploadReport(
-                            kernelVersion = res.banner,
-                            diagnosticReport = diag,
-                            customProfileJson = profJson
-                        ).onSuccess {
-                            withContext(Dispatchers.Main) {
-                                addLog("[boot-parser] Auto-sent generated profile to Telegram.")
-                            }
-                        }.onFailure { err ->
-                            withContext(Dispatchers.Main) {
-                                addLog("[boot-parser] Auto Telegram upload skipped/failed: ${err.message}")
-                            }
-                        }
-                    }
                 }
                 is ParseResult.Error -> {
                     parseResultDialog = res
@@ -4900,6 +4921,33 @@ class MainActivity : ComponentActivity() {
                 }
                 if (rc == 0 && active) {
                     markRunThisBoot()
+                    val dynProf = DynamicProfileManager.lookup(kernelVersion)
+                    if (dynProf != null) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val profJson = dynProf.toJsonString()
+                            val diag = """
+                                Verified Root Profile (success)
+                                Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})
+                                Board: ${Build.BRAND} / ${Build.BOARD} / ${Build.HARDWARE}
+                                Kernel: $kernelVersion
+                                Engine: ${dynProf.engine}
+                                Fingerprint: ${Build.FINGERPRINT}
+                            """.trimIndent()
+                            SupportUploader.uploadReport(
+                                kernelVersion = kernelVersion,
+                                diagnosticReport = diag,
+                                customProfileJson = profJson
+                            ).onSuccess {
+                                withContext(Dispatchers.Main) {
+                                    addLog("[profile] Verified profile auto-shared to support.")
+                                }
+                            }.onFailure { err ->
+                                withContext(Dispatchers.Main) {
+                                    addLog("[profile] Auto-share skipped: ${err.message}")
+                                }
+                            }
+                        }
+                    }
                 }
                 addLog(if (active) "KernelSU module loaded" else "KernelSU module not loaded")
                 if (rc == 0 && active && !softReboot) {
