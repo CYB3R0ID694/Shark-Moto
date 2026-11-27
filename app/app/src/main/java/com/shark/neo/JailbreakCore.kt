@@ -134,9 +134,20 @@ object JailbreakCore {
             Build.BRAND.equals("vivo", ignoreCase = true) ||
             Build.BRAND.equals("iQOO", ignoreCase = true)
 
+    private fun isColorOSDevice(): Boolean =
+        Build.MANUFACTURER.equals("OPPO", ignoreCase = true) ||
+            Build.MANUFACTURER.equals("realme", ignoreCase = true) ||
+            Build.BRAND.equals("OPPO", ignoreCase = true) ||
+            Build.BRAND.equals("realme", ignoreCase = true)
+
     /** Chase pays off on vivo/iQOO; on Xiaomi and ColorOS ports it is opt-in. */
     fun defaultChaseRetry(kind: String): Boolean =
         isVivoOemDevice() || kind == "CVE61223" || kind == "CVE66127"
+
+    fun defaultChaseRetry(kind: String, release: String): Boolean =
+        defaultChaseRetry(kind) ||
+            (isColorOSDevice() &&
+                release == "6.12.69-android16-6-g242e1a07f878-ab15865446-4k")
 
     /** ManagerKind name -> (PYB110_MANAGER value, package). */
     fun managerRuntime(kindName: String): Pair<String, String> = when (kindName) {
@@ -311,6 +322,22 @@ object JailbreakCore {
                 baseEnv.add("GHOSTLOCK_CONF_PATH=${confFile.absolutePath}")
             }
             baseEnv.add("GHOSTLOCK_ROUTE=${dynProfile.siteMask}")
+        }
+
+        if (isColorOSDevice() &&
+            cfg.release == "6.12.69-android16-6-g242e1a07f878-ab15865446-4k") {
+            baseEnv.addAll(listOf(
+                "SHARK_SLAB_ORDER=0",
+                "SHARK_GROOM_TIMERS=32768",
+                "SHARK_RECLAIM_RETRY=1",
+                "SHARK_WAIT_FREE_MS=12000",
+                "SHARK_CHURN_MAX=12",
+                "SHARK_CHURN_TIMERS=16384",
+                "SHARK_CHURN_ROUND_MS=200",
+                "SHARK_PREFILL_TIMERS=4096",
+                "SHARK_SPRAY_MAX_ROUNDS=6",
+                "SHARK_CHASE_MAX_ROUNDS=10"
+            ))
         }
 
         return baseEnv.toTypedArray()
