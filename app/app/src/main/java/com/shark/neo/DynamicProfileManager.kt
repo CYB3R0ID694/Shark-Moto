@@ -64,25 +64,12 @@ object DynamicProfileManager {
                 loadFromJson(local.readText())
             }.onFailure { Log.w(TAG, "Failed to load local profiles: ${it.message}") }
         }
-
-        // Also reload any raw GhostLock .conf profiles saved in filesDir/kernel_profiles
-        val confDir = File(context.filesDir, "kernel_profiles")
-        if (confDir.exists() && confDir.isDirectory) {
-            confDir.listFiles { f -> f.extension.equals("conf", ignoreCase = true) }?.forEach { confFile ->
-                runCatching {
-                    val res = GhostLockConfParser.parseString(confFile.readText(), confFile.name)
-                    if (res is ParseResult.Success && !profiles.containsKey(res.profile.release)) {
-                        profiles[res.profile.release] = res.profile
-                    }
-                }.onFailure { Log.w(TAG, "Failed to load local .conf ${confFile.name}: ${it.message}") }
-            }
-        }
     }
 
     data class ValidationResult(val isValid: Boolean, val error: String? = null)
 
     /**
-     * GhostLock-inspired kernel geometry validator.
+     * Kernel geometry validator.
      * Enforces canonical 64-bit address ranges and bitmask sanity before attempting exploit execution,
      * protecting against null pointer dereferences and kernel panics from corrupt profiles.
      */
@@ -92,11 +79,6 @@ object DynamicProfileManager {
         }
         if (profile.engine.isBlank()) {
             return ValidationResult(false, "Engine cannot be blank")
-        }
-
-        // GhostLock futex profiles use relative offsets, not absolute canonical KASLR addresses
-        if (profile.engine.equals("CVE43499_FUTEX", ignoreCase = true)) {
-            return ValidationResult(true)
         }
 
         fun parseHex(name: String, hex: String, minAddr: ULong = 0xffffff8000000000u): Pair<ULong, String?> {
@@ -199,23 +181,12 @@ object DynamicProfileManager {
     fun removeProfile(context: Context, release: String) {
         profiles.remove(release)
         saveProfiles(context)
-        runCatching {
-            val confDir = File(context.filesDir, "kernel_profiles")
-            if (confDir.exists()) {
-                File(confDir, "$release.conf").delete()
-                File(confDir, "${release.replace("/", "_")}.conf").delete()
-            }
-        }
     }
 
     fun clearAll(context: Context) {
         profiles.clear()
         val local = File(context.filesDir, FILE_NAME)
         if (local.exists()) local.delete()
-        runCatching {
-            val confDir = File(context.filesDir, "kernel_profiles")
-            if (confDir.exists()) confDir.deleteRecursively()
-        }
         // Reload bundled stock profiles
         runCatching {
             context.assets.open("profiles.json").bufferedReader().use {
@@ -248,9 +219,35 @@ object DynamicProfileManager {
                 arr.put(obj)
             }
             json.put("profiles", arr)
+            val jsonStr = json.toString(2)
             val local = File(context.filesDir, FILE_NAME)
-            local.writeText(json.toString(2))
+            local.writeText(jsonStr)
+            exportLocalProfilesJson(context, jsonStr)
         }.onFailure { Log.e(TAG, "Failed to save profiles: ${it.message}") }
+    }
+
+    /**
+     * Also exports the updated profiles.json to user-accessible storage (Download/Shark/profiles.json)
+     * with fallback to app-specific external files dir if scoped storage blocks public Downloads.
+     */
+    fun exportLocalProfilesJson(context: Context, jsonStr: String): File? {
+        val publicDir = File(
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+            "Shark"
+        )
+        runCatching {
+            if (!publicDir.exists()) publicDir.mkdirs()
+            val outFile = File(publicDir, "profiles.json")
+            outFile.writeText(jsonStr)
+            return outFile
+        }
+        val fallbackDir = context.getExternalFilesDir(null) ?: return null
+        return runCatching {
+            if (!fallbackDir.exists()) fallbackDir.mkdirs()
+            val outFile = File(fallbackDir, "profiles.json")
+            outFile.writeText(jsonStr)
+            outFile
+        }.getOrNull()
     }
 
     suspend fun syncRemote(context: Context): Result<Int> = withContext(Dispatchers.IO) {
@@ -274,7 +271,4 @@ object DynamicProfileManager {
             }
         }
     }
-
-    suspend fun syncGhostLock(context: Context, currentKernel: String = ""): Result<GhostLockRepoSync.SyncSummary> =
-        GhostLockRepoSync.syncAllFromRepo(context, currentKernel)
 }

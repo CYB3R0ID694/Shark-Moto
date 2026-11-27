@@ -39,7 +39,22 @@ object BootSymbolParser {
     suspend fun parseFromUri(context: Context, uri: Uri): ParseResult = withContext(Dispatchers.IO) {
         runCatching {
             val resolver = context.contentResolver
-            val filename = uri.lastPathSegment ?: "unknown"
+            var filename = ""
+            runCatching {
+                resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (idx != -1) {
+                            val name = cursor.getString(idx)
+                            if (!name.isNullOrBlank()) filename = name
+                        }
+                    }
+                }
+            }
+            if (filename.isBlank()) {
+                val seg = uri.lastPathSegment ?: "boot.img"
+                filename = seg.substringAfterLast('/').substringAfterLast(':').trim().ifEmpty { "boot.img" }
+            }
 
             val inputStream = resolver.openInputStream(uri)
                 ?: return@withContext ParseResult.Error("Could not read selected file.")
@@ -142,16 +157,8 @@ object BootSymbolParser {
             }
         }
 
-        // Check if GhostLock .conf profile (HOCON format)
-        val textHeader = runCatching { String(data.take(1024).toByteArray(), Charsets.UTF_8) }.getOrNull() ?: ""
-        if (filename.endsWith(".conf", ignoreCase = true) || textHeader.contains("symbols {") || textHeader.contains("route =") || textHeader.contains("route:")) {
-            val confResult = GhostLockConfParser.parseString(String(data, Charsets.UTF_8), filename)
-            if (confResult is ParseResult.Success) {
-                return confResult
-            }
-        }
-
         // Check if text symbol file (e.g. ic-syms.txt)
+        val textHeader = runCatching { String(data.take(1024).toByteArray(), Charsets.UTF_8) }.getOrNull() ?: ""
         if (textHeader.startsWith("#") || textHeader.contains("build=") || textHeader.contains("selinux_state=")) {
             return parseTextTable(String(data, Charsets.UTF_8), filename)
         }
@@ -160,6 +167,11 @@ object BootSymbolParser {
         val kernelBytes: ByteArray = when {
             // Android Boot Image (v0 - v4)
             data.size >= 8 && data.take(8).toByteArray().contentEquals("ANDROID!".toByteArray(Charsets.US_ASCII)) -> {
+                val buf = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+                val kSize = buf.getInt(8).toLong() and 0xFFFFFFFFL
+                if (kSize == 0L) {
+                    return ParseResult.Error("This image has kernel_size=0 (likely init_boot.img or ramdisk-only). Please select boot.img instead.")
+                }
                 extractFromBootImg(data) ?: return ParseResult.Error("Failed to extract kernel from boot.img header.")
             }
             else -> data
@@ -241,28 +253,50 @@ object BootSymbolParser {
         if (kernelOffset >= data.size) return null
         val available = data.size - kernelOffset
         val extractLen = if (kernelSize in 1..available) kernelSize.toInt() else available
-        return data.copyOfRange(kernelOffset, kernelOffset + extractLen)
+        val rawKernel = data.copyOfRange(kernelOffset, kernelOffset + extractLen)
+        return stripMtkHeader(rawKernel)
     }
 
-    private fun decompressKernel(data: ByteArray): ByteArray? {
+    /**
+     * MediaTek (MTK) boot images often wrap the kernel payload in a 512-byte header
+     * starting with magic 0x88 0x16 0x88 0x58 (LE 0x58881688).
+     */
+    private fun stripMtkHeader(data: ByteArray): ByteArray {
+        if (data.size > 512 &&
+            data[0] == 0x88.toByte() && data[1] == 0x16.toByte() &&
+            data[2] == 0x88.toByte() && data[3] == 0x58.toByte()
+        ) {
+            return data.copyOfRange(512, data.size)
+        }
+        return data
+    }
+
+    private fun decompressKernel(rawInput: ByteArray): ByteArray? {
+        val data = stripMtkHeader(rawInput)
         if (data.size < 4) return null
 
-        // LZ4 legacy frame: 0x02 0x21 0x4c 0x18
-        if (data[0] == 0x02.toByte() && data[1] == 0x21.toByte() && data[2] == 0x4c.toByte() && data[3] == 0x18.toByte()) {
-            return decodeLz4Legacy(data)
-        }
+        tryDecompressAtOffset(data, 0)?.let { return it }
 
-        // Gzip: 0x1f 0x8b
-        if (data[0] == 0x1f.toByte() && data[1] == 0x8b.toByte()) {
-            return runCatching {
-                GZIPInputStream(ByteArrayInputStream(data)).use { it.readBytes() }
-            }.getOrNull()
-        }
-
-        // Raw ARM64 kernel (ARM\x64 at 0x38 or length > 1MB)
-        if (data.size > 0x40 && data[0x38] == 'A'.code.toByte() && data[0x39] == 'R'.code.toByte() &&
-            data[0x3a] == 'M'.code.toByte() && data[0x3b] == 0x64.toByte()) {
-            return data
+        // OEM/Qualcomm/MTK boot images may prepend a small stub or DTB header before the compressed kernel
+        val scanLimit = minOf(data.size - 16, 4096)
+        for (off in 1 until scanLimit) {
+            // GZIP (1f 8b 08)
+            if (data[off] == 0x1f.toByte() && data[off + 1] == 0x8b.toByte() && data[off + 2] == 0x08.toByte()) {
+                tryDecompressAtOffset(data, off)?.let { return it }
+            }
+            // LZ4 legacy (02 21 4c 18) or LZ4 frame (04 22 4d 18)
+            if ((data[off] == 0x02.toByte() && data[off + 1] == 0x21.toByte() && data[off + 2] == 0x4c.toByte() && data[off + 3] == 0x18.toByte()) ||
+                (data[off] == 0x04.toByte() && data[off + 1] == 0x22.toByte() && data[off + 2] == 0x4d.toByte() && data[off + 3] == 0x18.toByte())
+            ) {
+                tryDecompressAtOffset(data, off)?.let { return it }
+            }
+            // Raw ARM64 Image magic "ARM\x64" at +0x38
+            if (off + 0x3c < data.size &&
+                data[off + 0x38] == 'A'.code.toByte() && data[off + 0x39] == 'R'.code.toByte() &&
+                data[off + 0x3a] == 'M'.code.toByte() && data[off + 0x3b] == 0x64.toByte()
+            ) {
+                return data.copyOfRange(off, data.size)
+            }
         }
 
         // Fallback: check if uncompressed string exists
@@ -271,6 +305,128 @@ object BootSymbolParser {
         }
 
         return null
+    }
+
+    private fun tryDecompressAtOffset(data: ByteArray, off: Int): ByteArray? {
+        val slice = if (off == 0) data else data.copyOfRange(off, data.size)
+        if (slice.size < 4) return null
+
+        // LZ4 legacy frame: 0x02 0x21 0x4c 0x18
+        if (slice[0] == 0x02.toByte() && slice[1] == 0x21.toByte() && slice[2] == 0x4c.toByte() && slice[3] == 0x18.toByte()) {
+            return decodeLz4Legacy(slice)
+        }
+
+        // LZ4 standard frame (Samsung .lz4 / OEM): 0x04 0x22 0x4d 0x18
+        if (slice[0] == 0x04.toByte() && slice[1] == 0x22.toByte() && slice[2] == 0x4d.toByte() && slice[3] == 0x18.toByte()) {
+            return decodeLz4Frame(slice)
+        }
+
+        // Gzip: 0x1f 0x8b
+        if (slice[0] == 0x1f.toByte() && slice[1] == 0x8b.toByte()) {
+            return runCatching {
+                GZIPInputStream(ByteArrayInputStream(slice)).use { it.readBytes() }
+            }.getOrNull()
+        }
+
+        // Raw ARM64 kernel (ARM\x64 at 0x38)
+        if (slice.size > 0x40 && slice[0x38] == 'A'.code.toByte() && slice[0x39] == 'R'.code.toByte() &&
+            slice[0x3a] == 'M'.code.toByte() && slice[0x3b] == 0x64.toByte()) {
+            return slice
+        }
+
+        return null
+    }
+
+    /**
+     * Pure-Kotlin LZ4 Frame (0x184D2204) decoder for Samsung/MTK/Xiaomi boot.img.lz4 & framed kernels.
+     */
+    private fun decodeLz4Frame(src: ByteArray): ByteArray? {
+        if (src.size < 7) return null
+        var pos = 4
+        val flg = src[pos++].toInt() and 0xff
+        val bd = src[pos++].toInt() and 0xff
+        val hasContentSize = (flg and 0x08) != 0
+        val hasDictId = (flg and 0x01) != 0
+        val blockChecksum = (flg and 0x10) != 0
+        val contentChecksum = (flg and 0x04) != 0
+        val blockIndep = (flg and 0x20) != 0
+        if (hasContentSize) pos += 8
+        if (hasDictId) pos += 4
+        if (pos >= src.size) return null
+        pos++ // Header checksum
+
+        var outBuf = ByteArray(maxOf(src.size * 3, 64 * 1024 * 1024))
+        var outSize = 0
+        fun ensureCap(need: Int) {
+            if (outSize + need > outBuf.size) {
+                var newCap = outBuf.size * 2
+                while (outSize + need > newCap) newCap *= 2
+                outBuf = outBuf.copyOf(newCap)
+            }
+        }
+
+        while (pos + 4 <= src.size) {
+            val rawSz = (src[pos].toInt() and 0xff) or
+                ((src[pos + 1].toInt() and 0xff) shl 8) or
+                ((src[pos + 2].toInt() and 0xff) shl 16) or
+                ((src[pos + 3].toInt() and 0xff) shl 24)
+            pos += 4
+            if (rawSz == 0) break // EndMark
+            val uncompressed = (rawSz and 0x80000000.toInt()) != 0
+            val bsz = rawSz and 0x7fffffff
+            if (bsz <= 0 || pos + bsz > src.size) return null
+
+            if (uncompressed) {
+                ensureCap(bsz)
+                System.arraycopy(src, pos, outBuf, outSize, bsz)
+                outSize += bsz
+            } else {
+                var p = pos
+                val blkEnd = pos + bsz
+                val dictBase = if (blockIndep) outSize else 0
+                while (p < blkEnd) {
+                    val token = src[p++].toInt() and 0xff
+                    var ll = token ushr 4
+                    if (ll == 15) {
+                        var s: Int
+                        do {
+                            if (p >= blkEnd) return null
+                            s = src[p++].toInt() and 0xff
+                            ll += s
+                        } while (s == 255)
+                    }
+                    if (p + ll > blkEnd) return null
+                    ensureCap(ll)
+                    System.arraycopy(src, p, outBuf, outSize, ll)
+                    outSize += ll
+                    p += ll
+                    if (p >= blkEnd) break
+                    if (p + 2 > blkEnd) return null
+                    val offset = (src[p].toInt() and 0xff) or ((src[p + 1].toInt() and 0xff) shl 8)
+                    p += 2
+                    if (offset == 0) return null
+                    var ml = (token and 0x0f) + 4
+                    if ((token and 0x0f) == 15) {
+                        var s: Int
+                        do {
+                            if (p >= blkEnd) return null
+                            s = src[p++].toInt() and 0xff
+                            ml += s
+                        } while (s == 255)
+                    }
+                    ensureCap(ml)
+                    val copyStart = outSize - offset
+                    if (copyStart < dictBase) return null
+                    for (m in 0 until ml) {
+                        outBuf[outSize++] = outBuf[copyStart + (m % offset)]
+                    }
+                }
+            }
+            pos += bsz
+            if (blockChecksum) pos += 4
+        }
+        if (contentChecksum && pos + 4 <= src.size) pos += 4
+        return outBuf.copyOf(outSize)
     }
 
     private fun decodeLz4Legacy(src: ByteArray): ByteArray? {
@@ -862,6 +1018,9 @@ object BootSymbolParser {
 
         if (image.isNotEmpty() && base != 0L) {
             val allocTargets = listOfNotNull(
+                syms["kmem_cache_alloc_noprof"],
+                syms["kmem_cache_alloc_node_noprof"],
+                syms["kmem_cache_alloc_lru_noprof"],
                 syms["kmem_cache_alloc"],
                 syms["kmem_cache_alloc_node"],
                 syms["kmem_cache_alloc_trace"],
@@ -869,7 +1028,10 @@ object BootSymbolParser {
             )
             val timerFuncs = listOfNotNull(
                 syms["do_timer_create"],
+                syms["posix_timer_create"],
+                syms["create_posix_timer"],
                 syms["__arm64_sys_timer_create"],
+                syms["__do_sys_timer_create"],
                 syms["sys_timer_create"]
             )
             val copyFuncs = listOfNotNull(
@@ -962,16 +1124,20 @@ object BootSymbolParser {
         }
 
         // 2. Check if filename contains a device name (e.g. RMX3867_boot.img, realme_boot.img)
-        val cleanName = filename.substringBeforeLast(".")
-        val parts = cleanName.split("_", "-", " ").filter {
-            it.isNotBlank() && !it.equals("boot", ignoreCase = true) &&
-                    !it.equals("image", ignoreCase = true) && !it.equals("kernel", ignoreCase = true)
+        val cleanName = filename.substringAfterLast('/').substringAfterLast(':').substringBeforeLast(".")
+        val ignoreWords = setOf("boot", "image", "kernel", "img", "primary", "download", "downloads", "ringtones", "raw", "unknown")
+        val parts = cleanName.split("_", "-", " ", "/", ":").filter {
+            it.isNotBlank() && it.lowercase(java.util.Locale.ROOT) !in ignoreWords
         }
         if (parts.isNotEmpty()) {
             return parts.joinToString(" ")
         }
 
-        // 3. Fallback to host device info
+        // 3. Fallback to host device info / resolved device name
+        val hostName = DeviceNameResolver.getCachedOrLocalDeviceName(null, null)
+        if (hostName.isNotBlank() && hostName != "Unknown") {
+            return hostName
+        }
         return "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}"
     }
 

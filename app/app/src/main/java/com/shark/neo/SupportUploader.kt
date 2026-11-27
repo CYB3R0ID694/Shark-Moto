@@ -53,20 +53,23 @@ object SupportUploader {
                 }
             }
 
+            fun esc(s: String): String = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
             val textBuilder = StringBuilder().apply {
                 append("🦈 <b>Shark Neo - Device Support Request</b>\n\n")
-                append("📱 <b>Device:</b> <code>$displayDevice</code>\n")
-                append("🐧 <b>Kernel:</b> <code>$displayKernel</code>\n")
+                append("📱 <b>Device:</b> <code>${esc(displayDevice)}</code>\n")
+                append("🐧 <b>Kernel:</b> <code>${esc(displayKernel)}</code>\n")
                 if (!displayFingerprint.isNullOrBlank()) {
-                    append("🏷️ <b>Fingerprint:</b> <code>$displayFingerprint</code>\n\n")
+                    append("🏷️ <b>Fingerprint:</b> <code>${esc(displayFingerprint)}</code>\n\n")
                 } else {
                     append("\n")
                 }
                 if (!customProfileJson.isNullOrBlank()) {
-                    append("📋 <b>Extracted Profile JSON:</b>\n<pre><code class=\"language-json\">$customProfileJson</code></pre>\n")
-                } else if (diagnosticReport.isNotBlank()) {
-                    val snippet = diagnosticReport.take(2000)
-                    append("📊 <b>Diagnostic Summary:</b>\n<pre>$snippet</pre>\n")
+                    append("📋 <b>Extracted Profile JSON:</b>\n<pre><code class=\"language-json\">${esc(customProfileJson)}</code></pre>\n")
+                }
+                if (diagnosticReport.isNotBlank()) {
+                    val snippet = diagnosticReport.take(1800)
+                    append("📊 <b>Details:</b>\n<pre>${esc(snippet)}</pre>\n")
                 }
             }
 

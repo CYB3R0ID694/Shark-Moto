@@ -65,6 +65,17 @@ object DeviceNameResolver {
             }
         }
 
+        // Hardware signatures for known Redmi / Xiaomi targets
+        if (brand.contains("xiaomi") || brand.contains("redmi") || model.contains("redmi", ignoreCase = true) || model.contains("26021RN18I", ignoreCase = true)) {
+            if (model.contains("26021RN18I", ignoreCase = true) ||
+                kernel?.contains("g666ad52b8230") == true
+            ) {
+                cachedDeviceName = "Redmi Note 17 5G"
+                saveToCache(context, "Redmi Note 17 5G")
+                return "Redmi Note 17 5G"
+            }
+        }
+
         if (context != null) {
             runCatching {
                 val sp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
