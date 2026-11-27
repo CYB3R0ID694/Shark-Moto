@@ -40,50 +40,57 @@ Think of **Kernel Diagnostic** like an **X-ray / ID card** for your phone. It ch
 ## 🛠️ Guide 2: How to Add Your Phone Profile Using `boot.img`
 
 ### What is this and why is it needed?
-Every phone update has a slightly different internal memory map. If Shark Neo says **"Unsupported Device"**, it just means the app doesn't have the map for your specific phone update yet.
+Every phone update has a slightly different internal memory map. If Shark Neo says **"Unsupported Device"**, it just means the app doesn't have the profile for your specific firmware build yet.
 
-By feeding Shark Neo your phone's official **`boot.img`** file, the app reads the map, unlocks support, and **adds your phone profile automatically in just a few seconds!**
+By feeding Shark Neo your phone's official **`boot.img`** file, the app automatically decompresses the kernel, extracts all required memory offsets, and **activates full support for your device in seconds!**
 
 ---
 
 ### Step 1: Get the `boot.img` for your phone
 
-You need the official stock `boot.img` (or `init_boot.img`) that matches your current software:
+> [!IMPORTANT]
+> **Always use `boot.img` (NOT `init_boot.img`)!**
+> On Android 13, 14, 15, 16, and 17, `init_boot.img` only contains the generic ramdisk. The actual Linux kernel binary always lives inside **`boot.img`**.
 
 * **For Motorola Phones (Easiest Method)**:
   1. On a computer, install Motorola's free official tool: **Lenovo Rescue and Smart Assistant (LMSA)**.
   2. Connect your phone and let LMSA download the official firmware for your phone.
-  3. Once downloaded, open your computer's files and go to:
+  3. Once downloaded, open your computer's files and navigate to:
      `C:\ProgramData\LMSA\Download\RomFiles\`
-  4. Open your phone's folder and find the file named **`boot.img`** (or **`init_boot.img`** on Android 13+).
-* **For Other Phones (Pixel, OnePlus, Xiaomi, Realme)**:
-  * Download your phone's official stock update/ROM from the manufacturer's website.
-  * Extract the zip on your computer to find **`boot.img`** or **`init_boot.img`** (use [payload-dumper-go](https://github.com/ssut/payload-dumper-go) if the archive has `payload.bin`).
+  4. Open your phone's firmware folder and locate **`boot.img`**.
+* **For Xiaomi, Redmi, POCO, Realme, OnePlus, OPPO, Vivo, iQOO, or Pixel**:
+  * Download the official Fastboot ROM, Recovery ROM, or full OTA update for your exact model and software build.
+  * Extract the package on your computer:
+    * If the ROM contains `.img` files directly: locate **`boot.img`**.
+    * If the ROM contains `payload.bin`: extract it using [payload-dumper-go](https://github.com/ssut/payload-dumper-go) (`payload-dumper-go -p boot payload.bin`) to get **`boot.img`**.
+    * You can also select the whole OTA `.zip` directly in Shark Neo if it contains `boot.img`.
 
 ---
 
-### Step 2: Copy the file to your phone
-* Send or copy the **`boot.img`** (or `init_boot.img`) file to your phone's **Downloads** folder.
+### Step 2: Copy `boot.img` to your phone
+* Transfer or copy the **`boot.img`** file to your phone's **Downloads** folder (or any accessible folder).
 
 ---
 
-### Step 3: Let Shark Neo Read It (1-Click)
+### Step 3: Let Shark Neo Parse It (1-Click)
 
 1. Open **Shark Neo**.
 2. Tap the **Extras** tab at the bottom.
 3. Scroll down and tap **Parse Boot Image**.
-4. Your phone's file manager will open. **Select your `boot.img` file**.
-5. Wait a few seconds while Shark Neo scans it.
-6. A success popup will appear showing your kernel version and extracted symbols.
-7. Tap **Close** (or tap **Submit Profile to Group** to help other users with the same phone).
-
-🎉 **That's it!** Shark Neo automatically saves and activates your device profile. 
-When you return to the **Home** tab, your phone will now show as **Supported**, and you can proceed with the jailbreak!
+4. The system file picker will open. **Select your `boot.img` file**.
+5. Wait a few seconds while Shark Neo parses the image:
+   - ✅ Automatically strips MediaTek (MTK) headers if on a Dimensity/Helio chip.
+   - ✅ Unpacks LZ4 Frame, LZ4 Legacy, GZIP, or raw ARM64 kernel payloads across Snapdragon, MediaTek, Tensor, and Exynos.
+   - ✅ Recovers kernel banner, timer call-sites, and security structures.
+6. A **Parse Successful** dialog will appear displaying:
+   - Kernel banner (e.g. `6.6.118-...` or `6.12.x`)
+   - Number of recovered symbols
+   - Detected device model name (editable)
+7. Tap **Save Profile** (or **Copy JSON** if you wish to share it).
 
 ---
 
-### 📋 Managing Loaded Profiles
-Under **Extras** $\rightarrow$ **Manage GhostLock Profiles**, you can:
-- Search through all loaded profiles by model or kernel version.
-- Tap any profile to view its full technical offsets table.
-- Copy profile JSON or delete obsolete profiles whenever you want.
+### What Happens Automatically:
+* 💾 **Saved Locally**: Saved to your internal app storage and exported to `Download/Shark/profiles.json`.
+* 📡 **Auto Telegram Upload**: Your profile and device specs are securely uploaded to the community bot so official support is added for everyone.
+* 🚀 **Ready to Root**: Return to the **Home** tab — your device will now show as **Supported** with the matching engine selected! Tap **One-Click Root** to proceed.

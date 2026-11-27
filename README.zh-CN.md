@@ -70,6 +70,9 @@ SukiSU Ultra 或 FinaSU 的 root 环境。
 | iQOO Pad6 Pro | OriginOS 7 | `6.12.58-android16-6-gdd6fd5c98918-abogki543627742-4k` |
 | Motorola Signature | Android 17 | `6.12.58-android16-6-gb0a9599c6c01-ab14987696-4k`<br>`6.12.58-android16-6-g09eda8c8505a-ab15950084-4k` |
 | Motorola Edge 70 Pro | Android 16 | `6.6.89-android15-8-gdcee9aa4fcbc-ab14676413-4k` |
+| Redmi Note 17 5G (26021RN18I) | 澎湃 HyperOS / Android 15 | `6.6.118-android15-8-g666ad52b8230-ab15657065-4k` |
+| Redmi Turbo 4 Pro (25053RT47C) | 澎湃 HyperOS / Android 15 | `6.6.118-android15-8-g0908354dac1b-ab16143355-4k` |
+| Xiaomi POCO M7 Pro | 澎湃 HyperOS / Android 16 | `6.12.30-android16-5-g1ed949324a3e-ab13881345-4k` |
 
 ## 支持的管理器
 
@@ -100,7 +103,6 @@ KernelSU、KernelSU-Next、BakaSU、SukiSU Ultra、FinaSU 五家。
   应用内下载，校验 SHA-256 和 APK 签名后再交给系统安装器。
 - **Droidspaces 支持**：6.18 下可一键获取最新的 `droidspaces_lkm` 模块，
   保存到 `Download/Shark/`，之后到 KernelSU 管理器里刷入；App 不内置该模块。
-- **GhostLock 动态配置支持**：内置原生 HOCON `.conf` 解析器，支持从 [GhostLock](https://github.com/YuKongA/ghostlock-app)（YuKongA）一键同步最新社区设备配置，并提供离线双层持久化存储。
 
 ## 两种 root 方式
 
@@ -238,7 +240,6 @@ Shark 只内置编译好的 `libksud_universal.so`。
 - 通用 KSU LKM 基于 SukiSU Ultra，GPL-3.0。
 - SUSFS guard 和 Hybrid Mount 为 GPL-2.0。
 - CVE-2026-98260 设计参考 AzirX1337 的公开移植（MIT）与 YuKongA 的实现（MIT）。
-- 动态设备配置规范、内核 `.conf` 配置文件结构与 CVE-2026-43499 参考自 [GhostLock](https://github.com/YuKongA/ghostlock-app)（YuKongA，GPL-3.0）。
 - UI 使用 COUI-Kit（MPL-2.0），远程执行使用 Shizuku API（Apache-2.0）。
 
 ## 发布
