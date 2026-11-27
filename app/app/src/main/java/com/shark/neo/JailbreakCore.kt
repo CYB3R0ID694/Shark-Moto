@@ -46,6 +46,7 @@ object JailbreakCore {
         "6.6.118-android15-8-o-ga8027a191504-4k" to "CVE66118",
         "6.6.118-android15-8-g0908354dac1b-ab16143355-4k" to "CVE66118",
         "6.6.118-android15-8-g666ad52b8230-ab15657065-4k" to "CVE66118",
+        "6.6.118-android15-8-ge56cf6b09cca-ab15511674-4k" to "CVE66118",
         "6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k" to "CVE66127",
         "6.12.58-android16-6-g690108013dcc-abogki576129896-4k" to "CVE61258",
         "6.6.89-android15-8-gdcee9aa4fcbc-ab14676413-4k" to "CVE6689",
