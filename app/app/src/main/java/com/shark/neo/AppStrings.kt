@@ -1132,16 +1132,16 @@ object AppStrings {
 
     fun parseBootImage(lang: AppLanguage): String = when (lang) {
         AppLanguage.ZH -> "导入内核配置 (.conf / boot.img / OTA)"
-        AppLanguage.RU -> "Импорт профиля (.conf / boot.img / OTA)"
-        AppLanguage.PT -> "Importar Perfil (.conf / boot.img / OTA)"
-        else -> "Import Profile (.conf / boot.img / OTA)"
+        AppLanguage.RU -> "Разобрать boot.img / OTA"
+        AppLanguage.PT -> "Analisar boot.img / OTA"
+        else -> "Parse Boot Image"
     }
 
     fun parseBootImageSummary(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "导入 GhostLock .conf 配置或从本地 boot.img / OTA 提取符号"
-        AppLanguage.RU -> "Импорт профиля GhostLock .conf или извлечение из boot.img / OTA"
-        AppLanguage.PT -> "Importar perfil GhostLock .conf ou extrair do boot.img / OTA"
-        else -> "Import GhostLock .conf profile or extract symbols from boot.img / OTA"
+        AppLanguage.ZH -> "从本地 boot.img / init_boot.img / OTA 压缩包提取符号"
+        AppLanguage.RU -> "Извлечь символы ядра из boot.img / init_boot.img / OTA"
+        AppLanguage.PT -> "Extrair símbolos do kernel de boot.img / init_boot.img / OTA"
+        else -> "Extract kernel symbols from local boot.img / init_boot.img / OTA"
     }
 
     fun parsingBootTitle(lang: AppLanguage): String = when (lang) {
@@ -1355,91 +1355,5 @@ object AppStrings {
         AppLanguage.RU -> "Динамические профили и обновления"
         AppLanguage.PT -> "Perfis Dinâmicos e Atualizações"
         else -> "Dynamic Profiles & Updates"
-    }
-
-    // GhostLock Remote Repo Sync
-    fun syncGhostLockTitle(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "同步 GhostLock 仓库配置 (.conf)"
-        AppLanguage.RU -> "Синхронизация GhostLock (.conf)"
-        AppLanguage.PT -> "Sincronizar GhostLock (.conf)"
-        else -> "Sync GhostLock .conf Profiles"
-    }
-
-    fun syncGhostLockSummary(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "从 YuKongA/ghostlock-app 仓库在线获取最新 .conf 配置文件"
-        AppLanguage.RU -> "Загрузить свежие .conf профили из репозитория YuKongA/ghostlock-app"
-        AppLanguage.PT -> "Baixar perfis .conf recentes do repositório YuKongA/ghostlock-app"
-        else -> "Fetch latest .conf profiles from YuKongA/ghostlock-app repository"
-    }
-
-    fun syncGhostLockSuccess(count: Int, lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "已从 GhostLock 仓库导入 $count 个配置文件"
-        AppLanguage.RU -> "Импортировано $count профилей из репозитория GhostLock"
-        AppLanguage.PT -> "Importados $count perfis do repositório GhostLock"
-        else -> "Imported $count profiles from GhostLock repository"
-    }
-
-    fun syncGhostLockMatched(count: Int, model: String, lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "同步 $count 个配置！成功匹配本机: $model"
-        AppLanguage.RU -> "Импортировано: $count. Найдено совпадение для устройства: $model"
-        AppLanguage.PT -> "Importados: $count. Dispositivo correspondente: $model"
-        else -> "Imported $count profiles! Matched active device: $model"
-    }
-
-    // GhostLock Profile Management
-    fun manageGhostLockProfiles(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "管理 GhostLock 配置"
-        AppLanguage.RU -> "Управление профилями GhostLock"
-        AppLanguage.PT -> "Gerenciar Perfis GhostLock"
-        else -> "Manage GhostLock Profiles"
-    }
-
-    fun manageGhostLockProfilesSummary(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "查看已加载配置、检查内核符号与删除管理"
-        AppLanguage.RU -> "Просмотр, проверка символов ядра и удаление профилей"
-        AppLanguage.PT -> "Inspecionar símbolos do kernel e gerenciar/excluir perfis"
-        else -> "Inspect, view symbols, delete or clear synced community profiles"
-    }
-
-    fun profileDetailsTitle(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "内核配置详情"
-        AppLanguage.RU -> "Сведения о профиле ядра"
-        AppLanguage.PT -> "Detalhes do Perfil do Kernel"
-        else -> "Kernel Profile Details"
-    }
-
-    fun clearAllProfiles(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "清空所有配置"
-        AppLanguage.RU -> "Очистить все профили"
-        AppLanguage.PT -> "Limpar Todos os Perfis"
-        else -> "Clear All Profiles"
-    }
-
-    fun clearAllProfilesConfirm(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "确定要清除所有已同步和导入的社区配置并恢复默认吗？"
-        AppLanguage.RU -> "Вы уверены, что хотите удалить все синхронизированные профили и восстановить значения по умолчанию?"
-        AppLanguage.PT -> "Tem certeza de que deseja limpar todos os perfis sincronizados e restaurar os padrões?"
-        else -> "Are you sure you want to clear all synced community profiles and restore defaults?"
-    }
-
-    fun activeOnThisDevice(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "当前设备匹配"
-        AppLanguage.RU -> "Совпадает с активным ядром"
-        AppLanguage.PT -> "Correspondência com Kernel Ativo"
-        else -> "Matched Active Kernel"
-    }
-
-    fun deleteProfile(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "删除配置"
-        AppLanguage.RU -> "Удалить профиль"
-        AppLanguage.PT -> "Excluir Perfil"
-        else -> "Delete Profile"
-    }
-
-    fun profileDeleted(lang: AppLanguage): String = when (lang) {
-        AppLanguage.ZH -> "配置已删除"
-        AppLanguage.RU -> "Профиль удален"
-        AppLanguage.PT -> "Perfil excluído"
-        else -> "Profile deleted"
     }
 }
